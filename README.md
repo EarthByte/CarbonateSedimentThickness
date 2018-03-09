@@ -19,6 +19,8 @@ To generate the carbonate thickness grids you can either:
 In either case there are a bunch of top-level parameters that you can change/configure.
 By default `use_all_cpu_cores` is set to `True` to run on all CPU cores
 (otherwise it takes too long; up to 25 hours at 0.5 degree resolution using just a single core).
+Note that you can increase the `grid_spacing` parameter to reduce the running time.
+
 The location of the age, bathymetry and distance grids will need to be changed to point to your local grids.
 
 The mean-distance-to-passive-margins grids can be downloaded from ftp://ftp.earthbyte.org/Data_Collections/Dutkiewicz_etal_2017_G3/passive_margin_mean_distance_grids/

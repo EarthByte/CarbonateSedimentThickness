@@ -46,6 +46,11 @@ AVERAGE_OCEAN_FLOOR_SEDIMENT_DECAY = 1333.0
 DENSITY_MANTLE = 3330.0
 DENSITY_WATER = 1030.0
 
+# Dissolution distance (in metres) above the CCD.
+# This distance above the CCD is where carbonate dissolution is 100%.
+# Below this distance dissolution decreases linearly to 0% at the CCD.
+CCD_DISSOLUTION_DISTANCE = 300.0
+
 # Polynomial coefficients for predicting compacted sediment thickness and decompacted sediment rate from
 # age and mean distance to passive margins in the paper...
 #
@@ -461,22 +466,6 @@ def predict_carbonate_decompacted_sediment_thickness(
     # ocean crust and use it to adjust the bathymetry obtained from age-to-depth model for younger ages.
     bathymetry_model_adjustment = bathymetry - bathymetry_from_model
     
-    # Calculate bathymetry at the birth of this parcel of ocean crust at the mid-ocean ridge (at 0Ma).
-    #
-    # This is modelled from tectonic subsidence and predicted total compacted sediment thickness.
-    #
-    # Note: We predict total compacted sediment thickness at the birth age (0Ma) but assume the mean distance
-    # to passive margins is the same as for the current age (ie, is constant over the lifetime).
-    # This means we can just sample the pre-generated mean-distance grids and not have to worry about
-    # redoing those very lengthy calculations here.
-    bathymetry_at_birth = bathymetry_from_tectonic_subsidence_and_sedimentation(
-        0.0, distance, bathymetry_model_adjustment)
-    
-    # print('age, bat, bma: ',
-    #         age,
-    #         bathymetry_at_birth,
-    #         bathymetry_model_adjustment)
-    
     # We will accumulate carbonate deposition only above the CCD.
     carbonate_decompacted_sediment_thickness = 0.0
     
@@ -501,6 +490,8 @@ def predict_carbonate_decompacted_sediment_thickness(
         
         # Calculate bathymetry from tectonic subsidence and predicted total compacted sediment thickness.
         #
+        # This is modelled from tectonic subsidence and predicted total compacted sediment thickness.
+        #
         # Note: We predict total compacted sediment thickness for the younger age but assume the mean distance
         # to passive margins remains the same for younger ages (ie, is constant over the lifetime).
         # This means we can just sample the pre-generated mean-distance grids and not have to worry about
@@ -512,7 +503,7 @@ def predict_carbonate_decompacted_sediment_thickness(
         if bathymetry_at_younger_age > ccd_depth_at_younger_age:
             
             # Linearly interpolate the carbonate sedimentation rate with depth between the maximum rate
-            # at the bathymetry at birth (at MOR) and zero (at the CCD).
+            # at CCD_DISSOLUTION_DISTANCE metres above the CDD and zero (at the CCD).
             #
             # Because the dissolution of carbonate in the ocean is pressure and temperature dependent,
             # more and more carbonate gets dissolved as you go down. This effect ultimately causes the
@@ -523,15 +514,18 @@ def predict_carbonate_decompacted_sediment_thickness(
             # from the MOR depth at 0 Ma to the depth of the recent CCD (around 45-50 Ma) where the sed rate
             # flattens because below the CCD sed rate is no longer depth/age dependent. From published papers
             # it appears that it is a good assumption that the sed rate decreases linearly between the MOR depth
-            # and the CCD.. We know that it is zero for carbonates at the CCD, and the (maximum) value for the
+            # and the CCD. We know that it is zero for carbonates at the CCD, and the (maximum) value for the
             # MOR is obtained from a time-dependent carbonate sed rate file.
             # Of course if we have an oceanic plateau that is substantially shallower than the normal MOR this
             # rate might be even higher than what the graph implies for the MOR but we cannot do anything about that.
             # So what we want to do is make the sed rate linearly dependent on the depth range from the MOR to the CCD.
             #
+            # UPDATE: It was found that starting at the MOR ridge (2.5km) for 100% dissolution was too conservative.
+            #         Instead the dissolution zone is now always a fixed distance 'CCD_DISSOLUTION_DISTANCE' above the CCD.
+            #
             # Note that previously we used the sed rate far away from cont margins, ie at 3km distance,
             # as a proxy for carbonate sed rate. This used the (maximum) value for the MOR from the
-            # polynomial relationship for sed rate, ie we just plugged in0 Ma and 3000 km. This assumed
+            # polynomial relationship for sed rate, ie we just plugged in 0 Ma and 3000 km. This assumed
             # the carbonate sedimentation rate equals the total sedimentation rate because the maximum mean
             # distance to margins (mentioned above) essentially removes sediment contributions from continents.
             # However now we have a fixed carbonate sed rate curve loaded from a file instead.
@@ -543,8 +537,8 @@ def predict_carbonate_decompacted_sediment_thickness(
             max_carbonate_decompacted_sediment_rate = 10 * max_carbonate_decomp_sed_rate_cm_per_ky_curve(time_at_younger_age)
             carbonate_decompacted_sediment_rate = (
                 max_carbonate_decompacted_sediment_rate *
-                (bathymetry_at_younger_age - ccd_depth_at_younger_age) /
-                (bathymetry_at_birth - ccd_depth_at_younger_age)
+                min(bathymetry_at_younger_age - ccd_depth_at_younger_age, CCD_DISSOLUTION_DISTANCE) /
+                CCD_DISSOLUTION_DISTANCE
             )
             carbonate_decompacted_sediment_thickness += time_interval * carbonate_decompacted_sediment_rate
     
