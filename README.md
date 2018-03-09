@@ -11,9 +11,15 @@ The source code is compatible with Python 2.7.
 
 ## Usage
 
-You can either run the Jupyter notebook `carbonate_sediment_thickness.ipynb` or run `python run_carbonate_sediment_thickness.py` in a console/terminal window.
+To generate the carbonate thickness grids you can either:
 
-In either case there are a bunch of top-level parameters that you can change/configure. You'll need to at least change the location of the age, bathymetry and distance grids.
+- load the Jupyter notebook `carbonate_sediment_thickness.ipynb` and run all cells, or
+- type `python run_carbonate_sediment_thickness.py` in a console/terminal window.
+
+In either case there are a bunch of top-level parameters that you can change/configure.
+By default `use_all_cpu_cores` is set to `True` to run on all CPU cores
+(otherwise it takes too long; up to 25 hours at 0.5 degree resolution using just a single core).
+The location of the age, bathymetry and distance grids will need to be changed to point to your local grids.
 
 The mean-distance-to-passive-margins grids can be downloaded from ftp://ftp.earthbyte.org/Data_Collections/Dutkiewicz_etal_2017_G3/passive_margin_mean_distance_grids/
 
