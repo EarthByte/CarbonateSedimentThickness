@@ -6,6 +6,8 @@
 #
 
 import carbonate_sediment_thickness
+import os.path
+import os
 
 
 #
@@ -34,7 +36,6 @@ max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename = 'input_data/sed_rate_40
 # Location of age grids.
 # The full path to grids including filename, but with time and filename extension removed.
 age_grid_filename_prefix = 'E:/Users/John/Downloads/GPlates/data/rasters/Muller_etal_2016_AREPS_Agegrids/netCDF_0-230Ma/EarthByte_AREPS_Muller_etal_2016_AgeGrid-'
-# age_grid_filename_prefix = 'D:/Users/john/Downloads/gplates/data/Muller_etal_2016_AREPS_Agegrids/netCDF_0-230Ma/EarthByte_AREPS_Muller_etal_2016_AgeGrid-'
 # Filename extension (typically 'nc' or 'grd').
 age_grid_filename_extension = 'nc'
 
@@ -53,13 +54,18 @@ distance_filename_extension = 'nc'
 # Location of output carbonate decompacted and compacted sediment thickness grids.
 # The full path to thickness grids including the base filename
 # (grid spacing, time and filename extension will get added later).
-carbonate_decompacted_sediment_thickness_filename_prefix = 'sediment_thickness/decompacted_sediment_thickness'
-carbonate_compacted_sediment_thickness_filename_prefix = 'sediment_thickness/compacted_sediment_thickness'
-carbonate_deposition_mask_filename_prefix = 'sediment_thickness/deposition_mask'
+output_data_dir = 'sediment_thickness'
+carbonate_decompacted_sediment_thickness_filename_prefix = os.path.join(output_data_dir, 'decompacted_sediment_thickness')
+carbonate_compacted_sediment_thickness_filename_prefix = os.path.join(output_data_dir, 'compacted_sediment_thickness')
+carbonate_deposition_mask_filename_prefix = os.path.join(output_data_dir, 'deposition_mask')
 
 
 if __name__ == '__main__':
-
+    
+    # Create output directory if it doesn't exist.
+    if not os.path.exists(output_data_dir):
+        os.makedirs(output_data_dir)
+    
     # All functionality is delegated to "carbonate_sediment_thickness.py" to enable parallel processing.
     carbonate_sediment_thickness.predict_sedimentation_and_write_data_for_times(
         times,

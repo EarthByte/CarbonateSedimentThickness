@@ -765,9 +765,7 @@ def predict_sedimentation_and_write_data_for_times(
         
         # Split the workload across the CPUs.
         try:
-            print('A')
             pool = multiprocessing.Pool(initializer=low_priority)
-            print('B')
             pool_map_async_result = pool.map_async(
                 predict_sedimentation_and_write_data_parallel_pool_function,
                 (
