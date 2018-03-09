@@ -52,13 +52,13 @@ DENSITY_WATER = 1030.0
 #   "Predicting sediment thickness on vanished ocean crust since 200 Ma".
 #
 SEDIMENT_THICKNESS_POLYNOMIAL_COEFFICIENTS = [
-        5.3732890044120172, 0.44092176, -0.15401756,
-        -0.23843168, -0.06208386, 0.00957594,
-        0.07160925,  0.00344379,  0.        , -0.32534525]
+    5.3732890044120172, 0.44092176, -0.15401756,
+    -0.23843168, -0.06208386, 0.00957594,
+    0.07160925, 0.00344379, 0.0, -0.32534525]
 SEDIMENT_RATE_POLYNOMIAL_COEFFICIENTS = [
-        -1.0051420927669603, -0.30916322, -0.19923406,
-        0.38827883, -0.12533169, 0.0,
-        -0.11374372,  0.0297582 , -0.02391933, -0.36943835]
+    -1.0051420927669603, -0.30916322, -0.19923406,
+    0.38827883, -0.12533169, 0.0,
+    -0.11374372, 0.0297582, -0.02391933, -0.36943835]
 # Parameters used to standardize age and distance for both the sediment thickness and rate polynomials.
 SEDIMENT_POLYNOMIAL_MEAN_AGE = 60.1842831
 SEDIMENT_POLYNOMIAL_MEAN_DISTANCE = 1878.23124959
@@ -137,7 +137,7 @@ def get_positions_and_scalars(input_points, scalar_grid_filename, max_scalar=Non
             
             # If the point is outside the grid then the scalar grid will return 'NaN'.
             if math.isnan(scalar):
-                #print('Ignoring line "{0}" - point is outside scalar grid.'.format(line), file=sys.stderr)
+                # print('Ignoring line "{0}" - point is outside scalar grid.'.format(line), file=sys.stderr)
                 continue
             
             # Clamp to max value if requested.
@@ -167,8 +167,8 @@ def read_curve(curve_filename):
 
             if len(row) < 2:
                 raise ValueError('Curve file "{0}" does not have at least 2 columns at line {1}.'.format(
-                                        curve_filename,
-                                        curve_reader.line_num - 1))
+                                 curve_filename,
+                                 curve_reader.line_num - 1))
 
             x.append(float(row[0]))
             y.append(float(row[1]))
@@ -194,17 +194,17 @@ def write_grid_file_from_xyz(grid_filename, xyz_filename, grid_spacing):
     # The command-line strings to execute GMT 'nearneighbor'.
     # For example "nearneighbor thickness.xy -R-180/180/-90/90 -I1 -N4 -S1d -Gthickness.nc".
     gmt_command_line = [
-            "gmt",
-            "nearneighbor",
-            xyz_filename.encode(sys.getfilesystemencoding()),
-            "-N4",
-            "-S{0}d".format(1.5 * grid_spacing),
-            "-I{0}".format(grid_spacing),
-            "-R{0}/{1}/{2}/{3}".format(-180, 180, -90, 90),
-            # Use GMT gridline registration since our input point grid has data points on the grid lines.
-            # Gridline registration is the default so we don't need to force pixel registration...
-            #"-r", # Force pixel registration since data points are at centre of cells.
-            "-G{0}".format(grid_filename.encode(sys.getfilesystemencoding()))]
+        "gmt",
+        "nearneighbor",
+        xyz_filename.encode(sys.getfilesystemencoding()),
+        "-N4",
+        "-S{0}d".format(1.5 * grid_spacing),
+        "-I{0}".format(grid_spacing),
+        "-R{0}/{1}/{2}/{3}".format(-180, 180, -90, 90),
+        # Use GMT gridline registration since our input point grid has data points on the grid lines.
+        # Gridline registration is the default so we don't need to force pixel registration...
+        # "-r",  # Force pixel registration since data points are at centre of cells.
+        "-G{0}".format(grid_filename.encode(sys.getfilesystemencoding()))]
     call_system_command(gmt_command_line)
 
 
@@ -257,7 +257,7 @@ def depth_to_age_GDH1(depth):
     elif depth > -2600.0:
         # Minimum depth is 2600.
         return 0.0
-    elif depth > -4232.5: # depth at age 20
+    elif depth > -4232.5:  # depth at age 20
         return math.pow((-depth - 2600.0) / 365.0, 2.0)
     else:
         return math.log((5651.0 + depth) / 2473.0) / -0.0278
@@ -282,14 +282,14 @@ def predict_total_compacted_sediment_thickness(
     distance = (distance - SEDIMENT_POLYNOMIAL_MEAN_DISTANCE) / SEDIMENT_POLYNOMIAL_STD_DEVIATION_DISTANCE
     
     polynomial_features = [
-            1, age, distance,
-            age*age, age*distance, distance*distance,
-            age*age*age, age*age*distance, age*distance*distance, distance*distance*distance]
+        1, age, distance,
+        age * age, age * distance, distance * distance,
+        age * age * age, age * age * distance, age * distance * distance, distance * distance * distance]
     
     # Evaluate the polynomial to get the log of the predicated sediment thickness.
     log_sediment_thickness = sum(
-            SEDIMENT_THICKNESS_POLYNOMIAL_COEFFICIENTS[i] * polynomial_features[i]
-            for i in range(10))
+        SEDIMENT_THICKNESS_POLYNOMIAL_COEFFICIENTS[i] * polynomial_features[i]
+        for i in range(10))
     
     # Return the predicted sediment thickness (not as a logarithm).
     return math.exp(log_sediment_thickness)
@@ -309,14 +309,14 @@ def predict_total_decompacted_sediment_rate(
     distance = (distance - SEDIMENT_POLYNOMIAL_MEAN_DISTANCE) / SEDIMENT_POLYNOMIAL_STD_DEVIATION_DISTANCE
     
     polynomial_features = [
-            1, age, distance, age*age,
-            age*distance, distance*distance, age*age*age,
-            age*age*distance, age*distance*distance, distance*distance*distance]
+        1, age, distance, age * age,
+        age * distance, distance * distance, age * age * age,
+        age * age * distance, age * distance * distance, distance * distance * distance]
     
     # Evaluate the polynomial to get the log of the predicated sedimentation rate.
     log_sedimentation_rate = sum(
-            SEDIMENT_RATE_POLYNOMIAL_COEFFICIENTS[i] * polynomial_features[i]
-            for i in range(10))
+        SEDIMENT_RATE_POLYNOMIAL_COEFFICIENTS[i] * polynomial_features[i]
+        for i in range(10))
     
     # Return the predicted sedimentation rate (not as a logarithm).
     #
@@ -412,7 +412,7 @@ def sediment_isostatic_correction(sediment_thickness, average_sediment_density):
 def bathymetry_from_tectonic_subsidence_and_sedimentation(
         age,
         distance,
-        bathymetry_model_adjustment = 0.0):
+        bathymetry_model_adjustment=0.0):
     """
     Calculates tectonic subsidence of ocean floor (from age/depth curve) and predicts total compacted
     sediment thickness. Both are then combined to get bathymetry (with an offset correction).
@@ -427,13 +427,13 @@ def bathymetry_from_tectonic_subsidence_and_sedimentation(
     # Load sediment on top of the sediment-free depth.
     # Note we add (instead of subtract) because bathymetry and subsidence are negative here (instead of positive).
     bathymetry = tectonic_subsidence + sediment_isostatic_correction(
-            total_compacted_sediment_thickness, AVERAGE_OCEAN_FLOOR_SEDIMENT_DENSITY)
+        total_compacted_sediment_thickness, AVERAGE_OCEAN_FLOOR_SEDIMENT_DENSITY)
     
-    #print('ts, ct, it, b: ',
-    #        tectonic_subsidence,
-    #        total_compacted_sediment_thickness,
-    #        bathymetry - tectonic_subsidence,
-    #        bathymetry)
+    # print('ts, ct, it, b: ',
+    #         tectonic_subsidence,
+    #         total_compacted_sediment_thickness,
+    #         bathymetry - tectonic_subsidence,
+    #         bathymetry)
     
     # Add in the constant bathymetry offset (difference between actual bathymetry and bathymetry model).
     return bathymetry + bathymetry_model_adjustment
@@ -470,12 +470,12 @@ def predict_carbonate_decompacted_sediment_thickness(
     # This means we can just sample the pre-generated mean-distance grids and not have to worry about
     # redoing those very lengthy calculations here.
     bathymetry_at_birth = bathymetry_from_tectonic_subsidence_and_sedimentation(
-            0.0, distance, bathymetry_model_adjustment)
+        0.0, distance, bathymetry_model_adjustment)
     
-    #print('age, bat, bma: ',
-    #        age,
-    #        bathymetry_at_birth,
-    #        bathymetry_model_adjustment)
+    # print('age, bat, bma: ',
+    #         age,
+    #         bathymetry_at_birth,
+    #         bathymetry_model_adjustment)
     
     # We will accumulate carbonate deposition only above the CCD.
     carbonate_decompacted_sediment_thickness = 0.0
@@ -506,7 +506,7 @@ def predict_carbonate_decompacted_sediment_thickness(
         # This means we can just sample the pre-generated mean-distance grids and not have to worry about
         # redoing those very lengthy calculations here.
         bathymetry_at_younger_age = bathymetry_from_tectonic_subsidence_and_sedimentation(
-                younger_age, distance, bathymetry_model_adjustment)
+            younger_age, distance, bathymetry_model_adjustment)
         
         # If modelled bathymetry is above the CCD depth then add a 1My time interval to the time spent above CDD.
         if bathymetry_at_younger_age > ccd_depth_at_younger_age:
@@ -541,15 +541,17 @@ def predict_carbonate_decompacted_sediment_thickness(
             #
             # NOTE: The factor of 10 converts cm/Ky to m/My (the file has units of cm/Ky).
             max_carbonate_decompacted_sediment_rate = 10 * max_carbonate_decomp_sed_rate_cm_per_ky_curve(time_at_younger_age)
-            carbonate_decompacted_sediment_rate = (max_carbonate_decompacted_sediment_rate *
-                    (bathymetry_at_younger_age - ccd_depth_at_younger_age) /
-                    (bathymetry_at_birth - ccd_depth_at_younger_age))
+            carbonate_decompacted_sediment_rate = (
+                max_carbonate_decompacted_sediment_rate *
+                (bathymetry_at_younger_age - ccd_depth_at_younger_age) /
+                (bathymetry_at_birth - ccd_depth_at_younger_age)
+            )
             carbonate_decompacted_sediment_thickness += time_interval * carbonate_decompacted_sediment_rate
     
-            #print('  younger_age, b, cr: ',
-            #        younger_age,
-            #        bathymetry_at_younger_age,
-            #        carbonate_decompacted_sediment_rate / max_carbonate_decompacted_sediment_rate)
+            # print('  younger_age, b, cr: ',
+            #         younger_age,
+            #         bathymetry_at_younger_age,
+            #         carbonate_decompacted_sediment_rate / max_carbonate_decompacted_sediment_rate)
         
         end_younger_age_interval -= 1.0
     
@@ -557,7 +559,7 @@ def predict_carbonate_decompacted_sediment_thickness(
 
 
 def predict_sedimentation(
-        input_points, # List of (lon, lat) tuples,
+        input_points,  # List of (lon, lat) tuples,
         age_grid_filename,
         distance_filename,
         bathymetry_filename,
@@ -605,14 +607,14 @@ def predict_sedimentation(
         
         # Predict decompacted thickness.
         carbonate_decompacted_sediment_thickness = predict_carbonate_decompacted_sediment_thickness(
-                        age, distance, bathymetry,
-                        ccd_curve, max_carbonate_decomp_sed_rate_cm_per_ky_curve,
-                        time)
+            age, distance, bathymetry,
+            ccd_curve, max_carbonate_decomp_sed_rate_cm_per_ky_curve,
+            time)
         # Compact thickness.
         carbonate_compacted_sediment_thickness = compact_sediment_thickness(
-                carbonate_decompacted_sediment_thickness,
-                AVERAGE_OCEAN_FLOOR_SEDIMENT_POROSITY,
-                AVERAGE_OCEAN_FLOOR_SEDIMENT_DECAY)
+            carbonate_decompacted_sediment_thickness,
+            AVERAGE_OCEAN_FLOOR_SEDIMENT_POROSITY,
+            AVERAGE_OCEAN_FLOOR_SEDIMENT_DECAY)
         
         lon_lat_carbonate_decompacted_sediment_thickness_list.append((lon, lat, carbonate_decompacted_sediment_thickness))
         lon_lat_carbonate_compacted_sediment_thickness_list.append((lon, lat, carbonate_compacted_sediment_thickness))
@@ -663,34 +665,33 @@ def predict_sedimentation_and_write_data(
     # Predict carbonate decompacted and compacted sediment thickness at each input point that is in
     # the age, distance and bathmetry grids (in unmasked regions of all three grids).
     sediment_thickness_data = predict_sedimentation(
-            input_points,
-            age_grid_filename,
-            distance_filename,
-            bathymetry_filename,
-            ccd_curve,
-            max_carbonate_decomp_sed_rate_cm_per_ky_curve,
-            time)
+        input_points,
+        age_grid_filename,
+        distance_filename,
+        bathymetry_filename,
+        ccd_curve,
+        max_carbonate_decomp_sed_rate_cm_per_ky_curve,
+        time)
     if sediment_thickness_data is None:
-        print('Ignoring time "{0}" - no grid points inside age, distance and bathymetry grids.'.format(time),
-                file=sys.stderr)
+        print('Ignoring time "{0}" - no grid points inside age, distance and bathymetry grids.'.format(time), file=sys.stderr)
         return
     (carbonate_decompacted_sediment_thickness_data,
      carbonate_compacted_sediment_thickness_data,
      carbonate_deposition_mask_data) = sediment_thickness_data
 
     # Carbonate decompacted and compacted sediment thickness filenames without the filename extension.
-    carbonate_decompacted_sediment_thickness_base_filename = (carbonate_decompacted_sediment_thickness_filename_prefix +
-            '_{0}_{1}'.format(grid_spacing, time))
-    carbonate_compacted_sediment_thickness_base_filename = (carbonate_compacted_sediment_thickness_filename_prefix +
-            '_{0}_{1}'.format(grid_spacing, time))
-    carbonate_deposition_mask_base_filename = (carbonate_deposition_mask_filename_prefix +
-            '_{0}_{1}'.format(grid_spacing, time))
+    carbonate_decompacted_sediment_thickness_base_filename = (
+        carbonate_decompacted_sediment_thickness_filename_prefix + '_{0}_{1}'.format(grid_spacing, time))
+    carbonate_compacted_sediment_thickness_base_filename = (
+        carbonate_compacted_sediment_thickness_filename_prefix + '_{0}_{1}'.format(grid_spacing, time))
+    carbonate_deposition_mask_base_filename = (
+        carbonate_deposition_mask_filename_prefix + '_{0}_{1}'.format(grid_spacing, time))
     
     # Output Carbonate decompacted and compacted sediment thicknesses to '.xy' files and '.nc' files.
     write_data(
-            carbonate_decompacted_sediment_thickness_data,
-            carbonate_decompacted_sediment_thickness_base_filename,
-            grid_spacing)
+        carbonate_decompacted_sediment_thickness_data,
+        carbonate_decompacted_sediment_thickness_base_filename,
+        grid_spacing)
     write_data(
         carbonate_compacted_sediment_thickness_data,
         carbonate_compacted_sediment_thickness_base_filename,
@@ -768,26 +769,26 @@ def predict_sedimentation_and_write_data_for_times(
             pool = multiprocessing.Pool(initializer=low_priority)
             print('B')
             pool_map_async_result = pool.map_async(
-                    predict_sedimentation_and_write_data_parallel_pool_function,
+                predict_sedimentation_and_write_data_parallel_pool_function,
+                (
                     (
-                        (
-                            input_points,
-                            time,
-                            grid_spacing,
-                            ccd_curve_filename,
-                            max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
-                            age_grid_filename_prefix,
-                            age_grid_filename_extension,
-                            distance_filename_prefix,
-                            distance_filename_extension,
-                            bathymetry_filename_prefix,
-                            bathymetry_filename_extension,
-                            carbonate_decompacted_sediment_thickness_filename_prefix,
-                            carbonate_compacted_sediment_thickness_filename_prefix,
-                            carbonate_deposition_mask_filename_prefix
-                        ) for time in times
-                    ),
-                    1) # chunksize
+                        input_points,
+                        time,
+                        grid_spacing,
+                        ccd_curve_filename,
+                        max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
+                        age_grid_filename_prefix,
+                        age_grid_filename_extension,
+                        distance_filename_prefix,
+                        distance_filename_extension,
+                        bathymetry_filename_prefix,
+                        bathymetry_filename_extension,
+                        carbonate_decompacted_sediment_thickness_filename_prefix,
+                        carbonate_compacted_sediment_thickness_filename_prefix,
+                        carbonate_deposition_mask_filename_prefix
+                    ) for time in times
+                ),
+                1)  # chunksize
 
             # Apparently if we use pool.map_async instead of pool.map and then get the results
             # using a timeout, then we avoid a bug in Python where a keyboard interrupt does not work properly.
@@ -802,25 +803,25 @@ def predict_sedimentation_and_write_data_for_times(
             pool.close()
             pool.join()
 
-    else: # process in serial...
+    else:  # process in serial...
 
         # Iterate over times and generate grids for each time.
         for time in times:
             # Predict carbonate decompacted and compacted sediment thickness, and write results to output grids.
             predict_sedimentation_and_write_data(
-                    input_points,
-                    time,
-                    grid_spacing,
-                    ccd_curve_filename,
-                    max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
-                    age_grid_filename_prefix,
-                    age_grid_filename_extension,
-                    distance_filename_prefix,
-                    distance_filename_extension,
-                    bathymetry_filename_prefix,
-                    bathymetry_filename_extension,
-                    carbonate_decompacted_sediment_thickness_filename_prefix,
-                    carbonate_compacted_sediment_thickness_filename_prefix,
-                    carbonate_deposition_mask_filename_prefix)
+                input_points,
+                time,
+                grid_spacing,
+                ccd_curve_filename,
+                max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
+                age_grid_filename_prefix,
+                age_grid_filename_extension,
+                distance_filename_prefix,
+                distance_filename_extension,
+                bathymetry_filename_prefix,
+                bathymetry_filename_extension,
+                carbonate_decompacted_sediment_thickness_filename_prefix,
+                carbonate_compacted_sediment_thickness_filename_prefix,
+                carbonate_deposition_mask_filename_prefix)
     
     print('...finished.')
