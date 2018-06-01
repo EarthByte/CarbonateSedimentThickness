@@ -118,7 +118,8 @@ def get_positions_and_scalars(input_points, scalar_grid_filename, max_scalar=Non
     
     # Read lon, lat and scalar values from the output of 'grdtrack'.
     for line in stdout_data.splitlines():
-        if line.strip().startswith('#'):
+        if (line.strip().startswith('#') or
+            line.strip().startswith('>')):
             continue
         
         line_data = line.split()
@@ -167,7 +168,8 @@ def read_curve(curve_filename):
         curve_reader = csv.reader(curve_file, delimiter='\t',)
         for row in curve_reader:
             # Skip comments.
-            if row[0].startswith("#"):
+            if (row[0].startswith("#") or
+                row[0].startswith(">")):
                 continue
 
             if len(row) < 2:
