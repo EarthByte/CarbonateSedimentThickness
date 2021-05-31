@@ -30,3 +30,7 @@ The location of the age, bathymetry and distance grids will need to be changed t
 The mean-distance-to-passive-margins grids can be downloaded from https://www.earthbyte.org/webdav/ftp/Data_Collections/Dutkiewicz_etal_2017_G3/passive_margin_mean_distance_grids/
 
 The age grids can be downloaded from https://www.earthbyte.org/webdav/ftp/Data_Collections/Muller_Dutkiewicz_2018_SciAdv/Supplementary_grids/age_grids_AREPS2016/
+
+## Reference
+
+Dutkiewicz, A., Müller, R.D., Cannon, J., Vaughan, S. and Zahirovic, S., 2019, Sequestration and subduction of deep-sea carbonate in the global ocean since the Early Cretaceous. Geology, 47(1), pp.91-94. DOI:  https://doi.org/10.1130/G45424.1
