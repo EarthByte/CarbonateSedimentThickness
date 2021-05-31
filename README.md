@@ -5,7 +5,7 @@ Generate carbonate sediment thickness grids from age, mean distance and bathymet
 ## Prerequisites
 
 You'll need to install GMT (and make sure the 'gmt' executable is in the PATH).
-And also install the Python module 'scipy'.
+And also install the Python module 'scipy'. And on Windows platforms also install the Python module 'psutil'.
 
 The source code is compatible with Python 2.7.
 

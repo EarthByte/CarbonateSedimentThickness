@@ -19,7 +19,7 @@ grid_spacing = 0.5
 
 # Times to generate sediment thickness grids.
 # Must also have age and bathymetry grids at these times.
-times = range(0, 231)
+times = range(0, 181)
 
 # Whether to use all CPU cores (parallel) or just one (serial).
 # Note: Each process is set to a low priority so as not to interfere with your regular tasks.
@@ -31,11 +31,11 @@ ccd_curve_filename = 'input_data/Boss_Wilkinson_1991_global_CCD.txt'
 
 # Maximum carbonate decompacted sediment rate curve filename (in cm/ky).
 # This file maps time to the maximum carbonate rate (at mid-ocean ridge depth; reduces to zero at CCD).
-max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename = 'input_data/sed_rate_400_to_0_Ma.txt'
+max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename = 'input_data/sed_rate_v6.txt'
 
 # Location of age grids.
 # The full path to grids including filename, but with time and filename extension removed.
-age_grid_filename_prefix = 'E:/Users/John/Downloads/GPlates/data/rasters/Muller_etal_2016_AREPS_Agegrids/netCDF_0-230Ma/EarthByte_AREPS_Muller_etal_2016_AgeGrid-'
+age_grid_filename_prefix = 'E:/Users/John/Downloads/GPlates/data/rasters/Muller_etal_2016_AREPS_Agegrids_v1.15/netCDF-4_0-230Ma/EarthByte_AREPS_v1.15_Muller_etal_2016_AgeGrid-'
 # Filename extension (typically 'nc' or 'grd').
 age_grid_filename_extension = 'nc'
 
