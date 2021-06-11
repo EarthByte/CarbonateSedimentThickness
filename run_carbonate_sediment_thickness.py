@@ -19,7 +19,7 @@ grid_spacing = 0.5
 
 # Times to generate sediment thickness grids.
 # Must also have age and bathymetry grids at these times.
-times = range(0, 181)
+times = list(range(0, 181))
 
 # Whether to use all CPU cores (parallel) or just one (serial).
 # Note: Each process is set to a low priority so as not to interfere with your regular tasks.
@@ -35,19 +35,19 @@ max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename = 'input_data/sed_rate_v6
 
 # Location of age grids.
 # The full path to grids including filename, but with time and filename extension removed.
-age_grid_filename_prefix = 'E:/Users/John/Downloads/GPlates/data/rasters/Muller_etal_2016_AREPS_Agegrids_v1.15/netCDF-4_0-230Ma/EarthByte_AREPS_v1.15_Muller_etal_2016_AgeGrid-'
+age_grid_filename_prefix = '/home/michael/workspace/CarbonateSedimentThickness/age_grids_AREPS2016/agegrid_'
 # Filename extension (typically 'nc' or 'grd').
 age_grid_filename_extension = 'nc'
 
 # Location of bathymetry grids.
 # The full path to grids including filename, but with time and filename extension removed.
-bathymetry_filename_prefix = 'E:/Users/John/Downloads/GPlates/data/rasters/Sioned/02_Paleobathymetry_with_seds_LIPs_Sioned/pbathy-with-seds-and-LIPs-AREPS-muller-etal-'
+bathymetry_filename_prefix = '/home/michael/workspace/CarbonateSedimentThickness/Sioned/02_Paleobathymetry_with_seds_LIPs_Sioned/pbathy-with-seds-and-LIPs-AREPS-muller-etal-'
 # Filename extension (typically 'nc' or 'grd').
 bathymetry_filename_extension = 'grd'
 
 # Location of mean-distance-to-passive-margins grids.
 # The full path to grids including filename, but with time and filename extension removed.
-distance_filename_prefix = 'E:/Users/John/Downloads/GPlates/data/PythonWorkflows/SedimentationRate/shortest_path_distance_grids_clamped_1d/grid_reg_mean_distance_1.0d_'
+distance_filename_prefix = '/home/michael/workspace/CarbonateSedimentThickness/passive_margin_mean_distance_grids/grid_reg_mean_distance_1.0d_'
 # Filename extension (typically 'nc' or 'grd').
 distance_filename_extension = 'nc'
 

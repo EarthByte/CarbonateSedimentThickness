@@ -23,7 +23,7 @@
 ############################################################################################
 
 
-from __future__ import print_function
+
 from call_system_command import call_system_command
 import csv
 import math
@@ -112,14 +112,14 @@ def get_positions_and_scalars(input_points, scalar_grid_filename, max_scalar=Non
 
     # The command-line strings to execute GMT 'grdtrack'.
     grdtrack_command_line = ["gmt", "grdtrack", "-nl", "-G{0}".format(scalar_grid_filename)]
-    stdout_data = call_system_command(grdtrack_command_line, stdin=input_points_data, return_stdout=True)
+    stdout_data = call_system_command(grdtrack_command_line, stdin=input_points_data.encode('utf-8'), return_stdout=True)
     
     lon_lat_scalar_list = []
     
     # Read lon, lat and scalar values from the output of 'grdtrack'.
     for line in stdout_data.splitlines():
-        if (line.strip().startswith('#') or
-            line.strip().startswith('>')):
+        if (line.strip().startswith(b'#') or
+            line.strip().startswith(b'>')):
             continue
         
         line_data = line.split()
@@ -164,7 +164,7 @@ def read_curve(curve_filename):
     
     x = []
     y = []
-    with open(curve_filename, 'rb') as curve_file:
+    with open(curve_filename, 'r') as curve_file:
         curve_reader = csv.reader(curve_file, delimiter='\t',)
         for row in curve_reader:
             # Skip comments.
@@ -203,7 +203,7 @@ def write_grid_file_from_xyz(grid_filename, xyz_filename, grid_spacing):
     gmt_command_line = [
         "gmt",
         "nearneighbor",
-        xyz_filename.encode(sys.getfilesystemencoding()),
+        xyz_filename,
         "-N4",
         "-S{0}d".format(1.5 * grid_spacing),
         "-I{0}".format(grid_spacing),
@@ -211,7 +211,7 @@ def write_grid_file_from_xyz(grid_filename, xyz_filename, grid_spacing):
         # Use GMT gridline registration since our input point grid has data points on the grid lines.
         # Gridline registration is the default so we don't need to force pixel registration...
         # "-r",  # Force pixel registration since data points are at centre of cells.
-        "-G{0}".format(grid_filename.encode(sys.getfilesystemencoding()))]
+        "-G{0}".format(grid_filename)]
     call_system_command(gmt_command_line)
 
 
@@ -221,11 +221,11 @@ def write_data(
         grid_spacing):
     
     # Write XYZ file.
-    xyz_filename = u'{0}.xy'.format(output_filename_prefix)
+    xyz_filename = '{0}.xy'.format(output_filename_prefix)
     write_xyz_file(xyz_filename, data)
     
     # Write grid file.
-    grid_filename = u'{0}.nc'.format(output_filename_prefix)
+    grid_filename = '{0}.nc'.format(output_filename_prefix)
     write_grid_file_from_xyz(grid_filename, xyz_filename, grid_spacing)
 
 
@@ -390,7 +390,7 @@ def compact_sediment_thickness(thickness, surface_porosity, porosity_exp_decay):
 
     # Limit the number of iterations in case we never converge.
     # Although should converge within around 20 iterations (for 1e-6 accuracy).
-    for iteration in xrange(1000):
+    for iteration in range(1000):
         new_compacted_thickness = a * math.exp(-porosity_exp_decay * compacted_thickness) + b
         
         # If we've converged within a tolerance then we're done.

@@ -27,9 +27,11 @@ after each modification (or insert `reload(carbonate_sediment_thickness)` after 
 
 The location of the age, bathymetry and distance grids will need to be changed to point to your local grids.
 
-The mean-distance-to-passive-margins grids can be downloaded from https://www.earthbyte.org/webdav/ftp/Data_Collections/Dutkiewicz_etal_2017_G3/passive_margin_mean_distance_grids/
+The mean-distance-to-passive-margins grids can be downloaded from https://www.earthbyte.org/webdav/ftp/Data_Collections/Dutkiewicz_etal_2017_G3/passive_margin_mean_distance_grids/. Or you can run the workflow https://github.com/EarthByte/predicting-sediment-thickness to generate the grids.
 
-The age grids can be downloaded from https://www.earthbyte.org/webdav/ftp/Data_Collections/Muller_Dutkiewicz_2018_SciAdv/Supplementary_grids/age_grids_AREPS2016/
+The age grids can be downloaded from https://www.earthbyte.org/webdav/ftp/Data_Collections/Muller_etal_2019_Tectonics/Muller_etal_2019_Agegrids/Muller_etal_2019_Tectonics_v2.0_netCDF.zip .
+
+The bathymetry grids can be downloaded from https://www.earthbyte.org/webdav/ftp/Data_Collections/Wright_etal_2020_ESR/Grids/Paleobathymetry_RHCW18/ .
 
 ## Reference
 
