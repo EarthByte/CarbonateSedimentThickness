@@ -35,15 +35,15 @@ max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename = 'input_data/sed_rate_v6
 
 # Location of age grids.
 # The full path to grids including filename, but with time and filename extension removed.
-age_grid_filename_prefix = '/home/michael/workspace/CarbonateSedimentThickness/age_grids_AREPS2016/agegrid_'
+age_grid_filename_prefix = '/home/michael/workspace/CarbonateSedimentThickness/Muller_etal_2019_Tectonics_v2.0_netCDF/Muller_etal_2019_Tectonics_v2.0_AgeGrid-'
 # Filename extension (typically 'nc' or 'grd').
 age_grid_filename_extension = 'nc'
 
 # Location of bathymetry grids.
 # The full path to grids including filename, but with time and filename extension removed.
-bathymetry_filename_prefix = '/home/michael/workspace/CarbonateSedimentThickness/Sioned/02_Paleobathymetry_with_seds_LIPs_Sioned/pbathy-with-seds-and-LIPs-AREPS-muller-etal-'
+bathymetry_filename_prefix = '/home/michael/workspace/CarbonateSedimentThickness/Paleobathymetry_RHCW18/paleobathymetry_'
 # Filename extension (typically 'nc' or 'grd').
-bathymetry_filename_extension = 'grd'
+bathymetry_filename_extension = 'nc'
 
 # Location of mean-distance-to-passive-margins grids.
 # The full path to grids including filename, but with time and filename extension removed.
