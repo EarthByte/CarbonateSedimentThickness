@@ -80,24 +80,33 @@ SEDIMENT_POLYNOMIAL_MAX_DISTANCE = 3000.
 #
 
 
-# Generate uniformly spaced lat/lon grid of global points.
-# Points use GMT grid registration (start and end exactly on the dateline).
-def generate_input_points_grid(grid_spacing_degrees):
+# Generate uniformly spaced lat/lon grid of points in the specified lat/lon range.
+# Points use GMT grid registration (start and end exactly on the dateline when using global lat/lon range).
+def generate_input_points_grid(
+        grid_spacing_degrees,
+        latitude_range,   # (min, max) tuple
+        longitude_range): # (min, max) tuple
     
-    if grid_spacing_degrees == 0:
+    min_lat, max_lat = latitude_range
+    min_lon, max_lon = longitude_range
+    
+    if (grid_spacing_degrees == 0 or
+        max_lat <= min_lat or
+        max_lon <= min_lon):
         return
     
     input_points = []
     
-    # Data points start *on* dateline (-180).
-    # If 180 is an integer multiple of grid spacing then final longitude also lands on dateline (+180).
-    num_latitudes = int(math.floor(180.0 / grid_spacing_degrees)) + 1
-    num_longitudes = int(math.floor(360.0 / grid_spacing_degrees)) + 1
+    # Data points start *on* 'min_lat' and 'min_lon'.
+    # If '(max_lat - min_lat)' is an integer multiple of grid spacing then final latitude also lands on 'max_lat'.
+    # If '(max_lon - min_lon)' is an integer multiple of grid spacing then final longitude also lands on 'max_lon'.
+    num_latitudes = int(math.floor((max_lat - min_lat) / grid_spacing_degrees)) + 1
+    num_longitudes = int(math.floor((max_lon - min_lon) / grid_spacing_degrees)) + 1
     for lat_index in range(num_latitudes):
-        lat = -90 + lat_index * grid_spacing_degrees
+        lat = min_lat + lat_index * grid_spacing_degrees
         
         for lon_index in range(num_longitudes):
-            lon = -180 + lon_index * grid_spacing_degrees
+            lon = min_lon + lon_index * grid_spacing_degrees
             
             input_points.append((lon, lat))
     
@@ -196,7 +205,12 @@ def write_xyz_file(output_filename, output_data):
             output_file.write(' '.join(str(item) for item in output_line) + '\n')
 
 
-def write_grid_file_from_xyz(grid_filename, xyz_filename, grid_spacing):
+def write_grid_file_from_xyz(
+        grid_filename,
+        xyz_filename,
+        grid_spacing,
+        latitude_range,
+        longitude_range):
     
     # The command-line strings to execute GMT 'nearneighbor'.
     # For example "nearneighbor thickness.xy -R-180/180/-90/90 -I1 -N4 -S1d -Gthickness.nc".
@@ -207,7 +221,7 @@ def write_grid_file_from_xyz(grid_filename, xyz_filename, grid_spacing):
         "-N4",
         "-S{0}d".format(1.5 * grid_spacing),
         "-I{0}".format(grid_spacing),
-        "-R{0}/{1}/{2}/{3}".format(-180, 180, -90, 90),
+        "-R{0}/{1}/{2}/{3}".format(longitude_range[0], longitude_range[1], latitude_range[0], latitude_range[1]),
         # Use GMT gridline registration since our input point grid has data points on the grid lines.
         # Gridline registration is the default so we don't need to force pixel registration...
         # "-r",  # Force pixel registration since data points are at centre of cells.
@@ -218,7 +232,9 @@ def write_grid_file_from_xyz(grid_filename, xyz_filename, grid_spacing):
 def write_data(
         data,
         output_filename_prefix,
-        grid_spacing):
+        grid_spacing,
+        latitude_range,
+        longitude_range):
     
     # Write XYZ file.
     xyz_filename = '{0}.xy'.format(output_filename_prefix)
@@ -226,7 +242,7 @@ def write_data(
     
     # Write grid file.
     grid_filename = '{0}.nc'.format(output_filename_prefix)
-    write_grid_file_from_xyz(grid_filename, xyz_filename, grid_spacing)
+    write_grid_file_from_xyz(grid_filename, xyz_filename, grid_spacing, latitude_range, longitude_range)
 
 
 #########################################################################################
@@ -630,6 +646,8 @@ def predict_sedimentation(
 def predict_sedimentation_and_write_data(
         input_points,
         time,
+        latitude_range,  # (min, max) tuple
+        longitude_range, # (min, max) tuple
         grid_spacing,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
@@ -687,15 +705,15 @@ def predict_sedimentation_and_write_data(
     write_data(
         carbonate_decompacted_sediment_thickness_data,
         carbonate_decompacted_sediment_thickness_base_filename,
-        grid_spacing)
+        grid_spacing, latitude_range, longitude_range)
     write_data(
         carbonate_compacted_sediment_thickness_data,
         carbonate_compacted_sediment_thickness_base_filename,
-        grid_spacing)
+        grid_spacing, latitude_range, longitude_range)
     write_data(
         carbonate_deposition_mask_data,
         carbonate_deposition_mask_base_filename,
-        grid_spacing)
+        grid_spacing, latitude_range, longitude_range)
 
 
 #
@@ -736,6 +754,8 @@ def low_priority():
 
 def predict_sedimentation_and_write_data_for_times(
         times,
+        latitude_range,  # (min, max) tuple
+        longitude_range, # (min, max) tuple
         grid_spacing,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
@@ -753,7 +773,7 @@ def predict_sedimentation_and_write_data_for_times(
     print('Starting...')
     
     # Generate a uniform global grid of lat/lon points.
-    input_points = generate_input_points_grid(grid_spacing)
+    input_points = generate_input_points_grid(grid_spacing, latitude_range, longitude_range)
 
     # Either distribute each time iteration (over array of times) across all CPU cores, or
     # run time iteration loop serially (ie, use only one CPU core).
@@ -768,6 +788,8 @@ def predict_sedimentation_and_write_data_for_times(
                     (
                         input_points,
                         time,
+                        latitude_range,
+                        longitude_range,
                         grid_spacing,
                         ccd_curve_filename,
                         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
@@ -805,6 +827,8 @@ def predict_sedimentation_and_write_data_for_times(
             predict_sedimentation_and_write_data(
                 input_points,
                 time,
+                latitude_range,
+                longitude_range,
                 grid_spacing,
                 ccd_curve_filename,
                 max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,

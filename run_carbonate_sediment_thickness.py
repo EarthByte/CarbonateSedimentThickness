@@ -17,6 +17,12 @@ import os
 # Grid spacing of ocean basin points (in degrees).
 grid_spacing = 0.5
 
+# Regional latitude and longitude range.
+# Keep latitudes in the range [-90, 90] and longitudes the in range [-180, 180].
+# Set to [-90, 90] and [-180, 180] to cover the entire globe.
+min_lat, max_lat = -90, 90
+min_lon, max_lon = -180, 180
+
 # Times to generate sediment thickness grids.
 # Must also have age and bathymetry grids at these times.
 times = list(range(0, 181))
@@ -69,6 +75,8 @@ if __name__ == '__main__':
     # All functionality is delegated to "carbonate_sediment_thickness.py" to enable parallel processing.
     carbonate_sediment_thickness.predict_sedimentation_and_write_data_for_times(
         times,
+        (min_lat, max_lat),
+        (min_lon, max_lon),
         grid_spacing,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
