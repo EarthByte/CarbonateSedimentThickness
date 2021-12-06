@@ -31,6 +31,13 @@ times = list(range(0, 181))
 # Note: Each process is set to a low priority so as not to interfere with your regular tasks.
 use_all_cpu_cores = True
 
+# Oceanic tectonic subsidence model (maps ocean age to depth).
+# Current models:
+# GDH1 (Stein and Stein 1992)   - carbonate_sediment_thickness.age_to_depth_GDH1
+# RHCW18 (Richards et al. 2020) - carbonate_sediment_thickness.age_to_depth_RHCW18
+age_to_depth_curve = carbonate_sediment_thickness.age_to_depth_GDH1
+#age_to_depth_curve = carbonate_sediment_thickness.age_to_depth_RHCW18
+
 # CCD (calcite compensation depth) curve filename.
 # This file maps time to CCD depth (negative).
 ccd_curve_filename = 'input_data/Boss_Wilkinson_1991_global_CCD.txt'
@@ -78,6 +85,7 @@ if __name__ == '__main__':
         (min_lat, max_lat),
         (min_lon, max_lon),
         grid_spacing,
+        age_to_depth_curve,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         age_grid_filename_prefix,

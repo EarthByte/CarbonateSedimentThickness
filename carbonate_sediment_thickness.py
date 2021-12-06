@@ -28,6 +28,7 @@ from call_system_command import call_system_command
 import csv
 import math
 import multiprocessing
+import os.path
 from scipy.interpolate import interp1d
 import sys
 
@@ -286,6 +287,25 @@ def depth_to_age_GDH1(depth):
         return math.log((5651.0 + depth) / 2473.0) / -0.0278
 
 
+#############################################################################
+# Richards et al. (2020)                                                    #
+# "Structure and dynamics of the oceanic lithosphere-asthenosphere system". #
+#############################################################################
+
+_RHCW18_age_to_depth_function = None
+
+def age_to_depth_RHCW18(age):
+
+    # Create the model function the first time we're called.
+    global _RHCW18_age_to_depth_function
+    if _RHCW18_age_to_depth_function is None:
+        RHCW18_age_to_depth_file = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'input_data', 'RHCW18', 'depth-1333-130-2500.dat')
+        # Read the age-to-depth curve depth=function(age) from age-to-depth data file.
+        _RHCW18_age_to_depth_function = read_curve(RHCW18_age_to_depth_file)
+
+    return _RHCW18_age_to_depth_function(age)
+
+
 #
 # Functions to predict, compact and isostatically correct sediment thickness.
 #
@@ -435,6 +455,7 @@ def sediment_isostatic_correction(sediment_thickness, average_sediment_density):
 def bathymetry_from_tectonic_subsidence_and_sedimentation(
         age,
         distance,
+        age_to_depth_curve,
         bathymetry_model_adjustment=0.0):
     """
     Calculates tectonic subsidence of ocean floor (from age/depth curve) and predicts total compacted
@@ -442,7 +463,7 @@ def bathymetry_from_tectonic_subsidence_and_sedimentation(
     """
     
     # Tectonic subsidence is just the age-to-depth model of ocean basement (ie, sediment free).
-    tectonic_subsidence = age_to_depth_GDH1(age)
+    tectonic_subsidence = age_to_depth_curve(age)
     
     # Predict total compacted sediment thickness for the current age and mean distance to passive margins.
     total_compacted_sediment_thickness = predict_total_compacted_sediment_thickness(age, distance)
@@ -466,6 +487,7 @@ def predict_carbonate_decompacted_sediment_thickness(
         age,
         distance,
         bathymetry,
+        age_to_depth_curve,
         ccd_curve,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve,
         time):
@@ -477,7 +499,7 @@ def predict_carbonate_decompacted_sediment_thickness(
     """
     
     # Model bathymetry from tectonic subsidence and predicted total compacted sediment thickness.
-    bathymetry_from_model = bathymetry_from_tectonic_subsidence_and_sedimentation(age, distance)
+    bathymetry_from_model = bathymetry_from_tectonic_subsidence_and_sedimentation(age, distance, age_to_depth_curve)
     
     # There will be a difference between the actual bathymetry and the bathymetry modelled on
     # age-to-depth subsidence. Assume this offset is constant over the lifetime of this parcel of
@@ -515,7 +537,7 @@ def predict_carbonate_decompacted_sediment_thickness(
         # This means we can just sample the pre-generated mean-distance grids and not have to worry about
         # redoing those very lengthy calculations here.
         bathymetry_at_younger_age = bathymetry_from_tectonic_subsidence_and_sedimentation(
-            younger_age, distance, bathymetry_model_adjustment)
+            younger_age, distance, age_to_depth_curve, bathymetry_model_adjustment)
         
         # If modelled bathymetry is above the CCD depth then add a 1My time interval to the time spent above CDD.
         if bathymetry_at_younger_age > ccd_depth_at_younger_age:
@@ -575,6 +597,7 @@ def predict_sedimentation(
         age_grid_filename,
         distance_filename,
         bathymetry_filename,
+        age_to_depth_curve,
         ccd_curve,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve,
         time):
@@ -620,7 +643,7 @@ def predict_sedimentation(
         # Predict decompacted thickness.
         carbonate_decompacted_sediment_thickness = predict_carbonate_decompacted_sediment_thickness(
             age, distance, bathymetry,
-            ccd_curve, max_carbonate_decomp_sed_rate_cm_per_ky_curve,
+            age_to_depth_curve, ccd_curve, max_carbonate_decomp_sed_rate_cm_per_ky_curve,
             time)
         # Compact thickness.
         carbonate_compacted_sediment_thickness = compact_sediment_thickness(
@@ -649,6 +672,7 @@ def predict_sedimentation_and_write_data(
         latitude_range,  # (min, max) tuple
         longitude_range, # (min, max) tuple
         grid_spacing,
+        age_to_depth_curve,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         age_grid_filename_prefix,
@@ -683,6 +707,7 @@ def predict_sedimentation_and_write_data(
         age_grid_filename,
         distance_filename,
         bathymetry_filename,
+        age_to_depth_curve,
         ccd_curve,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve,
         time)
@@ -757,6 +782,7 @@ def predict_sedimentation_and_write_data_for_times(
         latitude_range,  # (min, max) tuple
         longitude_range, # (min, max) tuple
         grid_spacing,
+        age_to_depth_curve,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         age_grid_filename_prefix,
@@ -791,6 +817,7 @@ def predict_sedimentation_and_write_data_for_times(
                         latitude_range,
                         longitude_range,
                         grid_spacing,
+                        age_to_depth_curve,
                         ccd_curve_filename,
                         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
                         age_grid_filename_prefix,
@@ -830,6 +857,7 @@ def predict_sedimentation_and_write_data_for_times(
                 latitude_range,
                 longitude_range,
                 grid_spacing,
+                age_to_depth_curve,
                 ccd_curve_filename,
                 max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
                 age_grid_filename_prefix,
