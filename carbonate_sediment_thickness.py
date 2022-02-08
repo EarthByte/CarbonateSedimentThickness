@@ -19,7 +19,7 @@
 
 ############################################################################################
 # Generate carbonate sediment thickness grids from age, mean distance and bathymetry grids #
-# over the time range 0-230Ma (in 1My increments).                                         #
+# over the time range 0-230Ma (in 1 Myr increments).                                         #
 ############################################################################################
 
 
@@ -456,14 +456,15 @@ def bathymetry_from_tectonic_subsidence_and_sedimentation(
         age,
         distance,
         age_to_depth_curve,
+        dynamic_topography=0.0,
         bathymetry_model_adjustment=0.0):
     """
     Calculates tectonic subsidence of ocean floor (from age/depth curve) and predicts total compacted
     sediment thickness. Both are then combined to get bathymetry (with an offset correction).
     """
     
-    # Tectonic subsidence is just the age-to-depth model of ocean basement (ie, sediment free).
-    tectonic_subsidence = age_to_depth_curve(age)
+    # Tectonic subsidence is just the age-to-depth model of ocean basement (ie, sediment free), plus optional dynamic topography.
+    tectonic_subsidence = age_to_depth_curve(age) + dynamic_topography
     
     # Predict total compacted sediment thickness for the current age and mean distance to passive margins.
     total_compacted_sediment_thickness = predict_total_compacted_sediment_thickness(age, distance)
@@ -484,112 +485,171 @@ def bathymetry_from_tectonic_subsidence_and_sedimentation(
 
 
 def predict_carbonate_decompacted_sediment_thickness(
-        age,
-        distance,
-        bathymetry,
+        lon_lat_age_distance_bathymetry_list,
         age_to_depth_curve,
         ccd_curve,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve,
-        time):
+        time,
+        dynamic_topography_model=None):
     """
     Predicts carbonate decompacted sediment thickness.
     
-    Returns a 2-tuple with first value the predicted thickness, and second value a mask that is
-    1.0 if carbonate is being deposited at the *current* time and NaN otherwise.
+    Returns a list of accumulated carbonate sediment thicknesses (one for each input point).
     """
     
-    # Model bathymetry from tectonic subsidence and predicted total compacted sediment thickness.
-    bathymetry_from_model = bathymetry_from_tectonic_subsidence_and_sedimentation(age, distance, age_to_depth_curve)
-    
-    # There will be a difference between the actual bathymetry and the bathymetry modelled on
-    # age-to-depth subsidence. Assume this offset is constant over the lifetime of this parcel of
-    # ocean crust and use it to adjust the bathymetry obtained from age-to-depth model for younger ages.
-    bathymetry_model_adjustment = bathymetry - bathymetry_from_model
-    
+    # The number of ocean points at 'time'.
+    num_points = len(lon_lat_age_distance_bathymetry_list)
+
+    # Extract each input data scalar into its own list.
+    lons = []
+    lats = []
+    ages = []
+    distances = []
+    bathymetrys = []
+    for lon, lat, age, distance, bathymetry in lon_lat_age_distance_bathymetry_list:
+        lons.append(lon)
+        lats.append(lat)
+        ages.append(age)
+        distances.append(distance)
+        bathymetrys.append(bathymetry)
+
+    # Initialise all carbonate deposition to zero.
     # We will accumulate carbonate deposition only above the CCD.
-    carbonate_decompacted_sediment_thickness = 0.0
+    carbonate_decompacted_sediment_thicknesses = [0.0] * num_points
+
+    # Initialise dynamic topography for all points at 'time'.
+    if dynamic_topography_model:
+        # Sample dynamic topography for all points in one call (for efficiency).
+        dynamic_topography_at_time = dynamic_topography_model.sample(time, lons, lats)
+    else:
+        # Use zero values for dynamic topography when no dynamic topography model is present.
+        dynamic_topography_at_time = [0.0] * num_points
+
+    # Initialise the offsets between actual bathymetry and modelled bathymetry for all ocean points at 'time'.
+    bathymetry_model_adjustments = []
+    for point_index in range(num_points):
+
+        # Model bathymetry from tectonic subsidence and predicted total compacted sediment thickness.
+        bathymetry_from_model = bathymetry_from_tectonic_subsidence_and_sedimentation(
+                ages[point_index], distances[point_index], age_to_depth_curve, dynamic_topography_at_time[point_index])
+        
+        # There will be a difference between the actual bathymetry and the bathymetry modelled on
+        # age-to-depth subsidence. Assume this offset is constant over the lifetime of this parcel of
+        # ocean crust and use it to adjust the bathymetry obtained from age-to-depth model for younger ages.
+        bathymetry_model_adjustment = bathymetrys[point_index] - bathymetry_from_model
+
+        bathymetry_model_adjustments.append(bathymetry_model_adjustment)
     
-    # Iterate over the lifetime of the current parcel of ocean crust.
-    # Start with the delta time interval ending with 'age' and then works backwards.
-    end_younger_age_interval = age
-    while end_younger_age_interval > 0.0:
+    # Time interval to reconstruct ocean points (from 'time' to each ocean point's time of appearance).
+    # Currently set to 1 Myr.
+    time_interval = 1.0
+    
+    # The '0.5 * time_interval' is so we sample at interval mid-points for better integration accuracy.
+    reconstruction_time = time + 0.5 * time_interval
+    reconstructed_ages = [(age - 0.5 * time_interval) for age in ages]
+    reconstructed_point_indices = range(num_points)
+    while True:
+
+        # Remove any ocean points that don't exist at the current reconstruction time
+        # (ie, they appeared after current reconstruction time).
+        index = 0
+        while index < len(reconstructed_point_indices):
+            reconstructed_point_index = reconstructed_point_indices[index]
+            if reconstructed_ages[reconstructed_point_index] <= 0:
+                del reconstructed_point_indices[index]
+                continue
+            index += 1
         
-        # All time intervals are 1My except possibly the first which will be
-        # less than 1My if 'age' is not an integral number.
-        if end_younger_age_interval >= 1.0:
-            time_interval = 1.0
-        else:
-            time_interval = end_younger_age_interval
+        # Finished if all ocean points appeared after current reconstruction time.
+        if not reconstructed_point_indices:
+            break
         
-        # For better integration accuracy of sediment thickness sample at the interval mid-point.
-        younger_age = end_younger_age_interval - 0.5 * time_interval
-        
-        # The CCD depth associated with the current time.
-        time_at_younger_age = time + age - younger_age
-        ccd_depth_at_younger_age = ccd_curve(time_at_younger_age)
-        
-        # Calculate bathymetry from tectonic subsidence and predicted total compacted sediment thickness.
-        #
-        # This is modelled from tectonic subsidence and predicted total compacted sediment thickness.
-        #
-        # Note: We predict total compacted sediment thickness for the younger age but assume the mean distance
-        # to passive margins remains the same for younger ages (ie, is constant over the lifetime).
-        # This means we can just sample the pre-generated mean-distance grids and not have to worry about
-        # redoing those very lengthy calculations here.
-        bathymetry_at_younger_age = bathymetry_from_tectonic_subsidence_and_sedimentation(
-            younger_age, distance, age_to_depth_curve, bathymetry_model_adjustment)
-        
-        # If modelled bathymetry is above the CCD depth then add a 1My time interval to the time spent above CDD.
-        if bathymetry_at_younger_age > ccd_depth_at_younger_age:
+        # Get dynamic topography values for ocean points existing at the current reconstruction time.
+        if dynamic_topography_model:
+            reconstructed_lons, reconstructed_lats = [], []
+            for reconstructed_point_index in reconstructed_point_indices:
+                reconstructed_lons.append(lons[reconstructed_point_index])
+                reconstructed_lats.append(lats[reconstructed_point_index])
             
-            # Linearly interpolate the carbonate sedimentation rate with depth between the maximum rate
-            # at CCD_DISSOLUTION_DISTANCE metres above the CDD and zero (at the CCD).
-            #
-            # Because the dissolution of carbonate in the ocean is pressure and temperature dependent,
-            # more and more carbonate gets dissolved as you go down. This effect ultimately causes the
-            # CCD to occur, but is actually reduces the sedimentation rates as we go down from the MOR
-            # towards deeper seafloor, and this phenomenon can be clearly seen in the sedimentation rates
-            # in the graph computed in "Predicting sediment thickness on vanished ocean crust since 200 Ma".
-            # You can see (in the previously mentioned sed rate graph) that the sed rate declines substantially
-            # from the MOR depth at 0 Ma to the depth of the recent CCD (around 45-50 Ma) where the sed rate
-            # flattens because below the CCD sed rate is no longer depth/age dependent. From published papers
-            # it appears that it is a good assumption that the sed rate decreases linearly between the MOR depth
-            # and the CCD. We know that it is zero for carbonates at the CCD, and the (maximum) value for the
-            # MOR is obtained from a time-dependent carbonate sed rate file.
-            # Of course if we have an oceanic plateau that is substantially shallower than the normal MOR this
-            # rate might be even higher than what the graph implies for the MOR but we cannot do anything about that.
-            # So what we want to do is make the sed rate linearly dependent on the depth range from the MOR to the CCD.
-            #
-            # UPDATE: It was found that starting at the MOR ridge (2.5km) for 100% dissolution was too conservative.
-            #         Instead the dissolution zone is now always a fixed distance 'CCD_DISSOLUTION_DISTANCE' above the CCD.
-            #
-            # Note that previously we used the sed rate far away from cont margins, ie at 3km distance,
-            # as a proxy for carbonate sed rate. This used the (maximum) value for the MOR from the
-            # polynomial relationship for sed rate, ie we just plugged in 0 Ma and 3000 km. This assumed
-            # the carbonate sedimentation rate equals the total sedimentation rate because the maximum mean
-            # distance to margins (mentioned above) essentially removes sediment contributions from continents.
-            # However now we have a fixed carbonate sed rate curve loaded from a file instead.
-            #
-            # Note that this is a decompacted thickness rate (ie, deposited at surface where no compaction takes place,
-            # but porosity effects still apply, albeit only the *surface* porosity).
-            #
-            # NOTE: The factor of 10 converts cm/Ky to m/My (the file has units of cm/Ky).
-            max_carbonate_decompacted_sediment_rate = 10 * max_carbonate_decomp_sed_rate_cm_per_ky_curve(time_at_younger_age)
-            carbonate_decompacted_sediment_rate = (
-                max_carbonate_decompacted_sediment_rate *
-                min(bathymetry_at_younger_age - ccd_depth_at_younger_age, CCD_DISSOLUTION_DISTANCE) /
-                CCD_DISSOLUTION_DISTANCE
-            )
-            carbonate_decompacted_sediment_thickness += time_interval * carbonate_decompacted_sediment_rate
-    
-            # print('  younger_age, b, cr: ',
-            #         younger_age,
-            #         bathymetry_at_younger_age,
-            #         carbonate_decompacted_sediment_rate / max_carbonate_decompacted_sediment_rate)
+            # Sample dynamic topography for all reconstructed points in one call (for efficiency).
+            dynamic_topography_at_reconstruction_time = dynamic_topography_model.sample(
+                    reconstruction_time, reconstructed_lons, reconstructed_lats)
         
-        end_younger_age_interval -= 1.0
+        else:
+            # Use zero values for dynamic topography when no dynamic topography model is present.
+            dynamic_topography_at_reconstruction_time = [0.0] * len(reconstructed_point_indices)
+            
+        # The CCD depth associated with the reconstructed time.
+        ccd_depth_at_reconstruction_time = ccd_curve(reconstruction_time)
+
+        # Reconstruct bathymetry for all ocean points that exist at the current reconstruction time.
+        for index, reconstructed_point_index in enumerate(reconstructed_point_indices):
+            
+            # Calculate bathymetry from tectonic subsidence and predicted total compacted sediment thickness.
+            #
+            # This is modelled from tectonic subsidence and predicted total compacted sediment thickness.
+            #
+            # Note: We predict total compacted sediment thickness for the younger age but assume the mean distance
+            # to passive margins remains the same for younger ages (ie, is constant over the lifetime).
+            # This means we can just sample the pre-generated mean-distance grids and not have to worry about
+            # redoing those very lengthy calculations here.
+            bathymetry_at_reconstruction_time = bathymetry_from_tectonic_subsidence_and_sedimentation(
+                    reconstructed_ages[reconstructed_point_index],
+                    distances[reconstructed_point_index],
+                    age_to_depth_curve,
+                    dynamic_topography_at_reconstruction_time[index],  # Note the use of 'index' instead of 'reconstructed_point_index'
+                    bathymetry_model_adjustments[reconstructed_point_index])
+            
+            # If modelled bathymetry is above the CCD depth then add a 1 Myr time interval to the time spent above CDD.
+            if bathymetry_at_reconstruction_time > ccd_depth_at_reconstruction_time:
+                
+                # Linearly interpolate the carbonate sedimentation rate with depth between the maximum rate
+                # at CCD_DISSOLUTION_DISTANCE metres above the CDD and zero (at the CCD).
+                #
+                # Because the dissolution of carbonate in the ocean is pressure and temperature dependent,
+                # more and more carbonate gets dissolved as you go down. This effect ultimately causes the
+                # CCD to occur, but is actually reduces the sedimentation rates as we go down from the MOR
+                # towards deeper seafloor, and this phenomenon can be clearly seen in the sedimentation rates
+                # in the graph computed in "Predicting sediment thickness on vanished ocean crust since 200 Ma".
+                # You can see (in the previously mentioned sed rate graph) that the sed rate declines substantially
+                # from the MOR depth at 0 Ma to the depth of the recent CCD (around 45-50 Ma) where the sed rate
+                # flattens because below the CCD sed rate is no longer depth/age dependent. From published papers
+                # it appears that it is a good assumption that the sed rate decreases linearly between the MOR depth
+                # and the CCD. We know that it is zero for carbonates at the CCD, and the (maximum) value for the
+                # MOR is obtained from a time-dependent carbonate sed rate file.
+                # Of course if we have an oceanic plateau that is substantially shallower than the normal MOR this
+                # rate might be even higher than what the graph implies for the MOR but we cannot do anything about that.
+                # So what we want to do is make the sed rate linearly dependent on the depth range from the MOR to the CCD.
+                #
+                # UPDATE: It was found that starting at the MOR ridge (2.5km) for 100% dissolution was too conservative.
+                #         Instead the dissolution zone is now always a fixed distance 'CCD_DISSOLUTION_DISTANCE' above the CCD.
+                #
+                # Note that previously we used the sed rate far away from cont margins, ie at 3km distance,
+                # as a proxy for carbonate sed rate. This used the (maximum) value for the MOR from the
+                # polynomial relationship for sed rate, ie we just plugged in 0 Ma and 3000 km. This assumed
+                # the carbonate sedimentation rate equals the total sedimentation rate because the maximum mean
+                # distance to margins (mentioned above) essentially removes sediment contributions from continents.
+                # However now we have a fixed carbonate sed rate curve loaded from a file instead.
+                #
+                # Note that this is a decompacted thickness rate (ie, deposited at surface where no compaction takes place,
+                # but porosity effects still apply, albeit only the *surface* porosity).
+                #
+                # NOTE: The factor of 10 converts cm/Ky to m/My (the file has units of cm/Ky).
+                max_carbonate_decompacted_sediment_rate = 10 * max_carbonate_decomp_sed_rate_cm_per_ky_curve(reconstruction_time)
+                carbonate_decompacted_sediment_rate = (
+                    max_carbonate_decompacted_sediment_rate *
+                    min(bathymetry_at_reconstruction_time - ccd_depth_at_reconstruction_time, CCD_DISSOLUTION_DISTANCE) /
+                    CCD_DISSOLUTION_DISTANCE
+                )
+                carbonate_decompacted_sediment_thicknesses[reconstructed_point_index] += time_interval * carbonate_decompacted_sediment_rate
+
+            # Decrease the age of crust as we step backward in time by one time interval.
+            reconstructed_ages[reconstructed_point_index] -= time_interval
+
+        # Increase the reconstruction time as we step backward in time by one time interval.
+        reconstruction_time += time_interval
     
-    return carbonate_decompacted_sediment_thickness
+    return carbonate_decompacted_sediment_thicknesses
 
 
 def predict_sedimentation(
@@ -630,22 +690,24 @@ def predict_sedimentation(
             distance = distance_dict[(lon, lat)]
             lon_lat_age_distance_bathymetry_list.append((lon, lat, age, distance, bathymetry))
     
+    # Predict *decompacted* thickness.
+    # We do this for all ocean basin points together since it's more efficient to sample dynamic topography for all points at once.
+    carbonate_decompacted_sediment_thickness_list = predict_carbonate_decompacted_sediment_thickness(
+        lon_lat_age_distance_bathymetry_list,
+        age_to_depth_curve, ccd_curve, max_carbonate_decomp_sed_rate_cm_per_ky_curve,
+        time)
+    
     # The CCD at the current time.
     ccd_at_current_time = ccd_curve(time)
     
-    # For each ocean basin point predict *decompacted* carbonate sediment thickness.
-    # Also generate *compacted* thickness.
+    # For each ocean basin point also generate *compacted* thickness.
     lon_lat_carbonate_decompacted_sediment_thickness_list = []
     lon_lat_carbonate_compacted_sediment_thickness_list = []
     lon_lat_carbonate_deposition_mask_list = []
-    for lon, lat, age, distance, bathymetry in lon_lat_age_distance_bathymetry_list:
+    for grid_sample_index, (lon, lat, age, distance, bathymetry) in enumerate(lon_lat_age_distance_bathymetry_list):
         
-        # Predict decompacted thickness.
-        carbonate_decompacted_sediment_thickness = predict_carbonate_decompacted_sediment_thickness(
-            age, distance, bathymetry,
-            age_to_depth_curve, ccd_curve, max_carbonate_decomp_sed_rate_cm_per_ky_curve,
-            time)
         # Compact thickness.
+        carbonate_decompacted_sediment_thickness = carbonate_decompacted_sediment_thickness_list[grid_sample_index]
         carbonate_compacted_sediment_thickness = compact_sediment_thickness(
             carbonate_decompacted_sediment_thickness,
             AVERAGE_OCEAN_FLOOR_SEDIMENT_POROSITY,
