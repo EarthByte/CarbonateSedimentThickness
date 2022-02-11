@@ -38,6 +38,15 @@ use_all_cpu_cores = True
 age_to_depth_curve = carbonate_sediment_thickness.age_to_depth_GDH1
 #age_to_depth_curve = carbonate_sediment_thickness.age_to_depth_RHCW18
 
+# Dynamic topography model.
+#
+# Can be any builtin dynamic topography model *name* supported by pyBacktrack
+# (see the list at https://pybacktrack.readthedocs.io/en/latest/pybacktrack_backtrack.html#dynamic-topography).
+#
+# Note: This can be 'None' if no dynamic topography is desired.
+dynamic_topography_model_name = None
+#dynamic_topography_model_name = 'M7'
+
 # CCD (calcite compensation depth) curve filename.
 # This file maps time to CCD depth (negative).
 ccd_curve_filename = 'input_data/Boss_Wilkinson_1991_global_CCD.txt'
@@ -86,6 +95,7 @@ if __name__ == '__main__':
         (min_lon, max_lon),
         grid_spacing,
         age_to_depth_curve,
+        dynamic_topography_model_name,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         age_grid_filename_prefix,

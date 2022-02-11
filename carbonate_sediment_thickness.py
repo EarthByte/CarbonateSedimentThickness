@@ -19,7 +19,7 @@
 
 ############################################################################################
 # Generate carbonate sediment thickness grids from age, mean distance and bathymetry grids #
-# over the time range 0-230Ma (in 1 Myr increments).                                         #
+# over the time range 0-230Ma (in 1 Myr increments).                                       #
 ############################################################################################
 
 
@@ -29,6 +29,7 @@ import csv
 import math
 import multiprocessing
 import os.path
+import pybacktrack
 from scipy.interpolate import interp1d
 import sys
 
@@ -487,10 +488,10 @@ def bathymetry_from_tectonic_subsidence_and_sedimentation(
 def predict_carbonate_decompacted_sediment_thickness(
         lon_lat_age_distance_bathymetry_list,
         age_to_depth_curve,
+        dynamic_topography_model_name,  # Can be None
         ccd_curve,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve,
-        time,
-        dynamic_topography_model=None):
+        time):
     """
     Predicts carbonate decompacted sediment thickness.
     
@@ -517,6 +518,12 @@ def predict_carbonate_decompacted_sediment_thickness(
     # We will accumulate carbonate deposition only above the CCD.
     carbonate_decompacted_sediment_thicknesses = [0.0] * num_points
 
+    # Create the dynamic topography model (from model name) if requested.
+    if dynamic_topography_model_name:
+        dynamic_topography_model = pybacktrack.InterpolateDynamicTopography.create_from_bundled_model(dynamic_topography_model_name)
+    else:
+        dynamic_topography_model = None
+    
     # Initialise dynamic topography for all points at 'time'.
     if dynamic_topography_model:
         # Sample dynamic topography for all points in one call (for efficiency).
@@ -547,7 +554,7 @@ def predict_carbonate_decompacted_sediment_thickness(
     # The '0.5 * time_interval' is so we sample at interval mid-points for better integration accuracy.
     reconstruction_time = time + 0.5 * time_interval
     reconstructed_ages = [(age - 0.5 * time_interval) for age in ages]
-    reconstructed_point_indices = range(num_points)
+    reconstructed_point_indices = list(range(num_points))
     while True:
 
         # Remove any ocean points that don't exist at the current reconstruction time
@@ -658,6 +665,7 @@ def predict_sedimentation(
         distance_filename,
         bathymetry_filename,
         age_to_depth_curve,
+        dynamic_topography_model_name,  # Can be None
         ccd_curve,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve,
         time):
@@ -694,7 +702,7 @@ def predict_sedimentation(
     # We do this for all ocean basin points together since it's more efficient to sample dynamic topography for all points at once.
     carbonate_decompacted_sediment_thickness_list = predict_carbonate_decompacted_sediment_thickness(
         lon_lat_age_distance_bathymetry_list,
-        age_to_depth_curve, ccd_curve, max_carbonate_decomp_sed_rate_cm_per_ky_curve,
+        age_to_depth_curve, dynamic_topography_model_name, ccd_curve, max_carbonate_decomp_sed_rate_cm_per_ky_curve,
         time)
     
     # The CCD at the current time.
@@ -735,6 +743,7 @@ def predict_sedimentation_and_write_data(
         longitude_range, # (min, max) tuple
         grid_spacing,
         age_to_depth_curve,
+        dynamic_topography_model_name,  # Can be None
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         age_grid_filename_prefix,
@@ -770,6 +779,7 @@ def predict_sedimentation_and_write_data(
         distance_filename,
         bathymetry_filename,
         age_to_depth_curve,
+        dynamic_topography_model_name,
         ccd_curve,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve,
         time)
@@ -845,6 +855,7 @@ def predict_sedimentation_and_write_data_for_times(
         longitude_range, # (min, max) tuple
         grid_spacing,
         age_to_depth_curve,
+        dynamic_topography_model_name,  # Can be None
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         age_grid_filename_prefix,
@@ -880,6 +891,7 @@ def predict_sedimentation_and_write_data_for_times(
                         longitude_range,
                         grid_spacing,
                         age_to_depth_curve,
+                        dynamic_topography_model_name,
                         ccd_curve_filename,
                         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
                         age_grid_filename_prefix,
@@ -920,6 +932,7 @@ def predict_sedimentation_and_write_data_for_times(
                 longitude_range,
                 grid_spacing,
                 age_to_depth_curve,
+                dynamic_topography_model_name,
                 ccd_curve_filename,
                 max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
                 age_grid_filename_prefix,
