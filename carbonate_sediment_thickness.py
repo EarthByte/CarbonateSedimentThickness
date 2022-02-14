@@ -502,14 +502,12 @@ def predict_carbonate_decompacted_sediment_thickness(
     num_points = len(lon_lat_age_distance_bathymetry_list)
 
     # Extract each input data scalar into its own list.
-    lons = []
-    lats = []
+    locations = []  # (lon, lat) tuples
     ages = []
     distances = []
     bathymetrys = []
     for lon, lat, age, distance, bathymetry in lon_lat_age_distance_bathymetry_list:
-        lons.append(lon)
-        lats.append(lat)
+        locations.append((lon, lat))
         ages.append(age)
         distances.append(distance)
         bathymetrys.append(bathymetry)
@@ -527,7 +525,7 @@ def predict_carbonate_decompacted_sediment_thickness(
     # Initialise dynamic topography for all points at 'time'.
     if dynamic_topography_model:
         # Sample dynamic topography for all points in one call (for efficiency).
-        dynamic_topography_at_time = dynamic_topography_model.sample(time, lons, lats)
+        dynamic_topography_at_time = dynamic_topography_model.sample(time, locations)
     else:
         # Use zero values for dynamic topography when no dynamic topography model is present.
         dynamic_topography_at_time = [0.0] * num_points
@@ -573,14 +571,12 @@ def predict_carbonate_decompacted_sediment_thickness(
         
         # Get dynamic topography values for ocean points existing at the current reconstruction time.
         if dynamic_topography_model:
-            reconstructed_lons, reconstructed_lats = [], []
-            for reconstructed_point_index in reconstructed_point_indices:
-                reconstructed_lons.append(lons[reconstructed_point_index])
-                reconstructed_lats.append(lats[reconstructed_point_index])
+            reconstructed_locations = [locations[reconstructed_point_index]
+                    for reconstructed_point_index in reconstructed_point_indices]
             
             # Sample dynamic topography for all reconstructed points in one call (for efficiency).
             dynamic_topography_at_reconstruction_time = dynamic_topography_model.sample(
-                    reconstruction_time, reconstructed_lons, reconstructed_lats)
+                    reconstruction_time, reconstructed_locations)
         
         else:
             # Use zero values for dynamic topography when no dynamic topography model is present.
