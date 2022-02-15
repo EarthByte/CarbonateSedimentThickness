@@ -310,7 +310,10 @@ def age_to_depth_RHCW18(age):
     if _RHCW18_age_to_depth_function is None:
         RHCW18_age_to_depth_file = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'input_data', 'RHCW18', 'depth-1333-130-2500.dat')
         # Read the age-to-depth curve depth=function(age) from age-to-depth data file.
-        _RHCW18_age_to_depth_function = read_curve(RHCW18_age_to_depth_file)
+        age_to_positive_depth_function = read_curve(RHCW18_age_to_depth_file)
+        def age_to_negative_depth_function(age):
+            return -age_to_positive_depth_function(age)
+        _RHCW18_age_to_depth_function = age_to_negative_depth_function
 
     return _RHCW18_age_to_depth_function(age)
 
