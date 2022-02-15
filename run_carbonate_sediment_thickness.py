@@ -47,6 +47,12 @@ age_to_depth_curve = carbonate_sediment_thickness.age_to_depth_GDH1
 dynamic_topography_model_name = None
 #dynamic_topography_model_name = 'M7'
 
+# The topological model used to assign plate IDs to ocean crust at paleo times (including crust subducted at present day).
+#
+# This is the name of a sub-directory in 'input_data/topology_model/'.
+# Currently only '2019_v2' is supported.
+topology_model_name = '2019_v2'
+
 # CCD (calcite compensation depth) curve filename.
 # This file maps time to CCD depth (negative).
 ccd_curve_filename = 'input_data/Boss_Wilkinson_1991_global_CCD.txt'
@@ -96,6 +102,7 @@ if __name__ == '__main__':
         grid_spacing,
         age_to_depth_curve,
         dynamic_topography_model_name,
+        topology_model_name,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         age_grid_filename_prefix,

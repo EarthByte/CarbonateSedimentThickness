@@ -29,7 +29,15 @@ import csv
 import math
 import multiprocessing
 import os.path
+# We'll use the slower path instead of using the faster PlateTectonicTools to assign plate IDs.
+# This removes our dependency on PlateTectonicTools.
+# The increased time does not affect the total running time very much
+# (most of the time is spent calculating bathymetry from subsidence model).
+use_ptt = False
+if use_ptt:
+    from ptt.utils import points_in_polygons
 import pybacktrack
+import pygplates
 from scipy.interpolate import interp1d
 import sys
 
@@ -488,7 +496,9 @@ def bathymetry_from_tectonic_subsidence_and_sedimentation(
 def predict_carbonate_decompacted_sediment_thickness(
         lon_lat_age_distance_bathymetry_list,
         age_to_depth_curve,
-        dynamic_topography_model_name,  # Can be None
+        dynamic_topography_model,  # Can be None
+        topology_filenames,
+        rotation_filenames,
         ccd_curve,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve,
         time):
@@ -501,13 +511,15 @@ def predict_carbonate_decompacted_sediment_thickness(
     # The number of ocean points at 'time'.
     num_points = len(lon_lat_age_distance_bathymetry_list)
 
-    # Extract each input data scalar into its own list.
+    # Extract input scalars.
     locations = []  # (lon, lat) tuples
+    points = []  # pygplates.PointOnSphere's
     ages = []
     distances = []
     bathymetrys = []
     for lon, lat, age, distance, bathymetry in lon_lat_age_distance_bathymetry_list:
         locations.append((lon, lat))
+        points.append(pygplates.PointOnSphere(lat, lon))
         ages.append(age)
         distances.append(distance)
         bathymetrys.append(bathymetry)
@@ -515,17 +527,38 @@ def predict_carbonate_decompacted_sediment_thickness(
     # Initialise all carbonate deposition to zero.
     # We will accumulate carbonate deposition only above the CCD.
     carbonate_decompacted_sediment_thicknesses = [0.0] * num_points
-
-    # Create the dynamic topography model (from model name) if requested.
-    if dynamic_topography_model_name:
-        dynamic_topography_model = pybacktrack.InterpolateDynamicTopography.create_from_bundled_model(dynamic_topography_model_name)
-    else:
-        dynamic_topography_model = None
     
     # Initialise dynamic topography for all points at 'time'.
     if dynamic_topography_model:
         # Sample dynamic topography for all points in one call (for efficiency).
         dynamic_topography_at_time = dynamic_topography_model.sample(time, locations)
+    
+        # Resolve the topologies for the current 'time'.
+        rotation_model = pygplates.RotationModel(rotation_filenames)
+        resolved_topologies = []
+        pygplates.resolve_topologies(topology_filenames, rotation_model, resolved_topologies, time)
+
+        # Assign a plate ID to each point using the resolved topologies.
+        # Because we'll need to reconstruct each point prior to sampling dynamic topography.
+        resolved_topology_boundaries = [resolved_topology.get_resolved_boundary()
+                for resolved_topology in resolved_topologies]
+        resolved_topology_plate_ids = [resolved_topology.get_feature().get_reconstruction_plate_id()
+                for resolved_topology in resolved_topologies]
+        if use_ptt:
+            point_plate_ids = points_in_polygons.find_polygons(points, resolved_topology_boundaries, resolved_topology_plate_ids)
+            # Default to zero plate ID for any points that happen to fall outside all topologies (eg, in a sliver crack).
+            for point_index, plate_id in enumerate(point_plate_ids):
+                if plate_id is None:
+                    point_plate_ids[point_index] = 0
+        else:
+            # Default to zero plate ID for any points that happen to fall outside all topologies (eg, in a sliver crack).
+            point_plate_ids = [0] * len(points)
+            for point_index, point in enumerate(points):
+                for resolved_topology_index, resolved_topology_boundary in enumerate(resolved_topology_boundaries):
+                    if resolved_topology_boundary.is_point_in_polygon(point):
+                        point_plate_ids[point_index] = resolved_topology_plate_ids[resolved_topology_index]
+                        break
+
     else:
         # Use zero values for dynamic topography when no dynamic topography model is present.
         dynamic_topography_at_time = [0.0] * num_points
@@ -554,6 +587,7 @@ def predict_carbonate_decompacted_sediment_thickness(
     reconstructed_ages = [(age - 0.5 * time_interval) for age in ages]
     reconstructed_point_indices = list(range(num_points))
     while True:
+        # print(reconstruction_time); sys.stdout.flush()
 
         # Remove any ocean points that don't exist at the current reconstruction time
         # (ie, they appeared after current reconstruction time).
@@ -571,8 +605,14 @@ def predict_carbonate_decompacted_sediment_thickness(
         
         # Get dynamic topography values for ocean points existing at the current reconstruction time.
         if dynamic_topography_model:
-            reconstructed_locations = [locations[reconstructed_point_index]
-                    for reconstructed_point_index in reconstructed_point_indices]
+            # Reconstruct each point from 'time' to 'reconstruction_time'.
+            reconstructed_locations = []
+            for reconstructed_point_index in reconstructed_point_indices:
+                plate_id = point_plate_ids[reconstructed_point_index]
+                rotation = rotation_model.get_rotation(reconstruction_time, plate_id, time)  # from 'time' to 'reconstruction_time'
+                reconstructed_point = rotation * points[reconstructed_point_index]
+                reconstructed_lat, reconstructed_lon = reconstructed_point.to_lat_lon()
+                reconstructed_locations.append((reconstructed_lon, reconstructed_lat))
             
             # Sample dynamic topography for all reconstructed points in one call (for efficiency).
             dynamic_topography_at_reconstruction_time = dynamic_topography_model.sample(
@@ -662,8 +702,10 @@ def predict_sedimentation(
         bathymetry_filename,
         age_to_depth_curve,
         dynamic_topography_model_name,  # Can be None
-        ccd_curve,
-        max_carbonate_decomp_sed_rate_cm_per_ky_curve,
+        topology_filenames,
+        rotation_filenames,
+        ccd_curve_filename,
+        max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         time):
     """
     Predicts decompacted and compacted carbonate thickness for each ocean basin grid point.
@@ -694,11 +736,27 @@ def predict_sedimentation(
             distance = distance_dict[(lon, lat)]
             lon_lat_age_distance_bathymetry_list.append((lon, lat, age, distance, bathymetry))
     
+    # Read the CCD curve from the CCD file.
+    # Returned curve is a function that accepts time and return depth.
+    ccd_curve = read_curve(ccd_curve_filename)
+    
+    # Read the maximum carbonate decompacted sedimentation rate curve from the file.
+    # Returned curve is a function that accepts time and return sedimentation rate (in cm/ky).
+    max_carbonate_decomp_sed_rate_cm_per_ky_curve = read_curve(max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename)
+
+    # Create the dynamic topography model (from model name) if requested.
+    if dynamic_topography_model_name:
+        dynamic_topography_model = pybacktrack.InterpolateDynamicTopography.create_from_bundled_model(dynamic_topography_model_name)
+    else:
+        dynamic_topography_model = None
+    
     # Predict *decompacted* thickness.
     # We do this for all ocean basin points together since it's more efficient to sample dynamic topography for all points at once.
     carbonate_decompacted_sediment_thickness_list = predict_carbonate_decompacted_sediment_thickness(
         lon_lat_age_distance_bathymetry_list,
-        age_to_depth_curve, dynamic_topography_model_name, ccd_curve, max_carbonate_decomp_sed_rate_cm_per_ky_curve,
+        age_to_depth_curve, dynamic_topography_model,
+        topology_filenames, rotation_filenames,
+        ccd_curve, max_carbonate_decomp_sed_rate_cm_per_ky_curve,
         time)
     
     # The CCD at the current time.
@@ -740,6 +798,7 @@ def predict_sedimentation_and_write_data(
         grid_spacing,
         age_to_depth_curve,
         dynamic_topography_model_name,  # Can be None
+        topology_model_name,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         age_grid_filename_prefix,
@@ -754,18 +813,20 @@ def predict_sedimentation_and_write_data(
     
     print('Time: ', time)
     
-    # Read the CCD curve from the CCD file.
-    # Returned curve is a function that accepts time and return depth.
-    ccd_curve = read_curve(ccd_curve_filename)
-    
-    # Read the maximum carbonate decompacted sedimentation rate curve from the file.
-    # Returned curve is a function that accepts time and return sedimentation rate (in cm/ky).
-    max_carbonate_decomp_sed_rate_cm_per_ky_curve = read_curve(max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename)
-    
     # Age, distance and bathymetry filenames for the current time.
     age_grid_filename = age_grid_filename_prefix + '{0}.{1}'.format(time, age_grid_filename_extension)
     distance_filename = distance_filename_prefix + '{0}.{1}'.format(time, distance_filename_extension)
     bathymetry_filename = bathymetry_filename_prefix + '{0}.{1}'.format(time, bathymetry_filename_extension)
+
+    # Read filenames listed in topology list file.
+    topology_list_filename = os.path.join('input_data', 'topology_model', topology_model_name, 'topology_files.txt')
+    with open(topology_list_filename, 'r') as topology_list_file:
+        topology_filenames = topology_list_file.read().splitlines()
+
+    # Read filenames listed in rotation list file.
+    rotation_list_filename = os.path.join('input_data', 'topology_model', topology_model_name, 'rotation_files.txt')
+    with open(rotation_list_filename, 'r') as rotation_list_file:
+        rotation_filenames = rotation_list_file.read().splitlines()
     
     # Predict carbonate decompacted and compacted sediment thickness at each input point that is in
     # the age, distance and bathmetry grids (in unmasked regions of all three grids).
@@ -776,8 +837,10 @@ def predict_sedimentation_and_write_data(
         bathymetry_filename,
         age_to_depth_curve,
         dynamic_topography_model_name,
-        ccd_curve,
-        max_carbonate_decomp_sed_rate_cm_per_ky_curve,
+        topology_filenames,
+        rotation_filenames,
+        ccd_curve_filename,
+        max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         time)
     if sediment_thickness_data is None:
         print('Ignoring time "{0}" - no grid points inside age, distance and bathymetry grids.'.format(time), file=sys.stderr)
@@ -852,6 +915,7 @@ def predict_sedimentation_and_write_data_for_times(
         grid_spacing,
         age_to_depth_curve,
         dynamic_topography_model_name,  # Can be None
+        topology_model_name,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         age_grid_filename_prefix,
@@ -888,6 +952,7 @@ def predict_sedimentation_and_write_data_for_times(
                         grid_spacing,
                         age_to_depth_curve,
                         dynamic_topography_model_name,
+                        topology_model_name,
                         ccd_curve_filename,
                         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
                         age_grid_filename_prefix,
@@ -929,6 +994,7 @@ def predict_sedimentation_and_write_data_for_times(
                 grid_spacing,
                 age_to_depth_curve,
                 dynamic_topography_model_name,
+                topology_model_name,
                 ccd_curve_filename,
                 max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
                 age_grid_filename_prefix,

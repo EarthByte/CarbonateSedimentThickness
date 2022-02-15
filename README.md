@@ -2,13 +2,13 @@
 
 Generate carbonate sediment thickness grids from age, mean distance and bathymetry grids over the time range 0-230Ma (in 1My increments).
 
-## Prerequisites
+## Dependencies
 
-- Install pyBacktrack (version >= 1.4).
-- Install GMT (and make sure the 'gmt' executable is in the PATH). This is required for pyBacktrack anyway.
-- Install pyGPlates. This is required for pyBacktrack anyway.
-- Install SciPy. This is required for pyBacktrack anyway.
-- And on Windows platforms also install 'psutil'.
+- [PyBacktrack](https://pybacktrack.readthedocs.io/en/latest/pybacktrack_getting_started.html#installation) (version >= 1.4)
+- [GMT](https://www.generic-mapping-tools.org/download/) (and make sure the 'gmt' executable is in the PATH) - this is required for pyBacktrack anyway.
+- [PyGPlates](https://www.gplates.org/docs/pygplates/pygplates_getting_started.html#installation) - this is required for pyBacktrack anyway.
+- SciPy - this is required for pyBacktrack anyway.
+- And on Windows platforms also install [psutil](https://pypi.org/project/psutil/).
 
 ## Usage
 
