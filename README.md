@@ -1,10 +1,9 @@
-# Predict carbonate sediment thickness
+# Calculate carbonate sediment thickness
 
-Generate carbonate sediment thickness grids from age, mean distance and bathymetry grids over the time range 0-230Ma (in 1My increments).
+Generate carbonate sediment thickness grids from age and bathymetry grids over the time range 0-230Ma (in 1My increments).
 
 ## Dependencies
 
-- [PyBacktrack](https://pybacktrack.readthedocs.io/en/latest/pybacktrack_getting_started.html#installation) (version >= 1.4)
 - [GMT](https://www.generic-mapping-tools.org/download/) (and make sure the 'gmt' executable is in the PATH) - this is required for pyBacktrack anyway.
 - [PyGPlates](https://www.gplates.org/docs/pygplates/pygplates_getting_started.html#installation) - this is required for pyBacktrack anyway.
 - SciPy - this is required for pyBacktrack anyway.
@@ -26,9 +25,7 @@ Note that you can increase the `grid_spacing` parameter to reduce the running ti
 (such as inside the imported module *carbonate_sediment_thickness*) then you'll need to restart the notebook kernel
 after each modification (or insert `reload(carbonate_sediment_thickness)` after `import carbonate_sediment_thickness`).
 
-The location of the age, bathymetry and distance grids will need to be changed to point to your local grids.
-
-The mean-distance-to-passive-margins grids can be downloaded from https://www.earthbyte.org/webdav/ftp/Data_Collections/Dutkiewicz_etal_2017_G3/passive_margin_mean_distance_grids/. Or you can run the workflow https://github.com/EarthByte/predicting-sediment-thickness to generate the grids.
+The location of the age and bathymetry will need to be changed to point to your local grids.
 
 The age grids can be downloaded from https://www.earthbyte.org/webdav/ftp/Data_Collections/Muller_etal_2019_Tectonics/Muller_etal_2019_Agegrids/Muller_etal_2019_Tectonics_v2.0_netCDF.zip .
 

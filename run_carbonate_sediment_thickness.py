@@ -1,6 +1,5 @@
 #
-# Generate carbonate sediment thickness grids from age, mean distance and bathymetry grids
-# over the time range 0-230Ma (in 1My increments).
+# Generate carbonate sediment thickness grids from paleobathymetry grids.
 #
 # See "carbonate_sediment_thickness.py" for details of the algorithm.
 #
@@ -31,22 +30,6 @@ times = list(range(0, 181))
 # Note: Each process is set to a low priority so as not to interfere with your regular tasks.
 use_all_cpu_cores = True
 
-# Oceanic tectonic subsidence model (maps ocean age to depth).
-# Current models:
-# GDH1 (Stein and Stein 1992)   - carbonate_sediment_thickness.age_to_depth_GDH1
-# RHCW18 (Richards et al. 2020) - carbonate_sediment_thickness.age_to_depth_RHCW18
-age_to_depth_curve = carbonate_sediment_thickness.age_to_depth_GDH1
-#age_to_depth_curve = carbonate_sediment_thickness.age_to_depth_RHCW18
-
-# Dynamic topography model.
-#
-# Can be any builtin dynamic topography model *name* supported by pyBacktrack
-# (see the list at https://pybacktrack.readthedocs.io/en/latest/pybacktrack_backtrack.html#dynamic-topography).
-#
-# Note: This can be 'None' if no dynamic topography is desired.
-dynamic_topography_model_name = None
-#dynamic_topography_model_name = 'M7'
-
 # The topological model used to assign plate IDs to ocean crust at paleo times (including crust subducted at present day).
 #
 # This is the name of a sub-directory in 'input_data/topology_model/'.
@@ -64,20 +47,24 @@ max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename = 'input_data/sed_rate_v6
 # Location of age grids.
 # The full path to grids including filename, but with time and filename extension removed.
 age_grid_filename_prefix = '/home/michael/workspace/CarbonateSedimentThickness/Muller_etal_2019_Tectonics_v2.0_netCDF/Muller_etal_2019_Tectonics_v2.0_AgeGrid-'
+# The number of decimal places in the time when it is added to the filename prefix (and following by the filename extension).
+# Typically either 0 or 1.
+age_grid_filename_decimal_places_in_time = 0
 # Filename extension (typically 'nc' or 'grd').
 age_grid_filename_extension = 'nc'
 
 # Location of bathymetry grids.
 # The full path to grids including filename, but with time and filename extension removed.
 bathymetry_filename_prefix = '/home/michael/workspace/CarbonateSedimentThickness/Paleobathymetry_RHCW18/paleobathymetry_'
+# The number of decimal places in the time when it is added to the filename prefix (and following by the filename extension).
+# Typically either 0 or 1.
+bathymetry_filename_decimal_places_in_time = 0
 # Filename extension (typically 'nc' or 'grd').
+#bathymetry_filename_extension = 'grd'
 bathymetry_filename_extension = 'nc'
 
-# Location of mean-distance-to-passive-margins grids.
-# The full path to grids including filename, but with time and filename extension removed.
-distance_filename_prefix = '/home/michael/workspace/CarbonateSedimentThickness/passive_margin_mean_distance_grids/grid_reg_mean_distance_1.0d_'
-# Filename extension (typically 'nc' or 'grd').
-distance_filename_extension = 'nc'
+# Time of the oldest bathymetry grid.
+bathymetry_filename_oldest_time = 230
 
 # Location of output carbonate decompacted and compacted sediment thickness grids.
 # The full path to thickness grids including the base filename
@@ -95,22 +82,17 @@ if __name__ == '__main__':
         os.makedirs(output_data_dir)
     
     # All functionality is delegated to "carbonate_sediment_thickness.py" to enable parallel processing.
-    carbonate_sediment_thickness.predict_sedimentation_and_write_data_for_times(
+    carbonate_sediment_thickness.calc_sedimentation_and_write_data_for_times(
         times,
         (min_lat, max_lat),
         (min_lon, max_lon),
         grid_spacing,
-        age_to_depth_curve,
-        dynamic_topography_model_name,
         topology_model_name,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
-        age_grid_filename_prefix,
-        age_grid_filename_extension,
-        distance_filename_prefix,
-        distance_filename_extension,
-        bathymetry_filename_prefix,
-        bathymetry_filename_extension,
+        (age_grid_filename_prefix, age_grid_filename_decimal_places_in_time, age_grid_filename_extension),
+        (bathymetry_filename_prefix, bathymetry_filename_decimal_places_in_time, bathymetry_filename_extension),
+        bathymetry_filename_oldest_time,
         carbonate_decompacted_sediment_thickness_filename_prefix,
         carbonate_compacted_sediment_thickness_filename_prefix,
         carbonate_deposition_mask_filename_prefix,

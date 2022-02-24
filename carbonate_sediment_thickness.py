@@ -17,10 +17,9 @@
 """
 
 
-############################################################################################
-# Generate carbonate sediment thickness grids from age, mean distance and bathymetry grids #
-# over the time range 0-230Ma (in 1 Myr increments).                                       #
-############################################################################################
+##############################################################################
+# Generate carbonate sediment thickness grids from age and bathymetry grids. #
+##############################################################################
 
 
 
@@ -33,10 +32,9 @@ import os.path
 # This removes our dependency on PlateTectonicTools.
 # The increased time does not affect the total running time very much
 # (most of the time is spent calculating bathymetry from subsidence model).
-use_ptt = False
-if use_ptt:
+USE_PTT = False
+if USE_PTT:
     from ptt.utils import points_in_polygons
-import pybacktrack
 import pygplates
 from scipy.interpolate import interp1d
 import sys
@@ -52,37 +50,10 @@ AVERAGE_OCEAN_FLOOR_SEDIMENT_DENSITY = 2647.0
 AVERAGE_OCEAN_FLOOR_SEDIMENT_POROSITY = 0.66
 AVERAGE_OCEAN_FLOOR_SEDIMENT_DECAY = 1333.0
 
-# Density mantle and water (kg/m^3).
-DENSITY_MANTLE = 3330.0
-DENSITY_WATER = 1030.0
-
 # Dissolution distance (in metres) above the CCD.
 # This distance above the CCD is where carbonate dissolution is 100%.
 # Below this distance dissolution decreases linearly to 0% at the CCD.
 CCD_DISSOLUTION_DISTANCE = 300.0
-
-# Polynomial coefficients for predicting compacted sediment thickness and decompacted sediment rate from
-# age and mean distance to passive margins in the paper...
-#
-#   "Predicting sediment thickness on vanished ocean crust since 200 Ma".
-#
-SEDIMENT_THICKNESS_POLYNOMIAL_COEFFICIENTS = [
-    5.3732890044120172, 0.44092176, -0.15401756,
-    -0.23843168, -0.06208386, 0.00957594,
-    0.07160925, 0.00344379, 0.0, -0.32534525]
-SEDIMENT_RATE_POLYNOMIAL_COEFFICIENTS = [
-    -1.0051420927669603, -0.30916322, -0.19923406,
-    0.38827883, -0.12533169, 0.0,
-    -0.11374372, 0.0297582, -0.02391933, -0.36943835]
-# Parameters used to standardize age and distance for both the sediment thickness and rate polynomials.
-SEDIMENT_POLYNOMIAL_MEAN_AGE = 60.1842831
-SEDIMENT_POLYNOMIAL_MEAN_DISTANCE = 1878.23124959
-SEDIMENT_POLYNOMIAL_VARIANCE_AGE = 1893.88287649
-SEDIMENT_POLYNOMIAL_STD_DEVIATION_AGE = math.sqrt(SEDIMENT_POLYNOMIAL_VARIANCE_AGE)
-SEDIMENT_POLYNOMIAL_VARIANCE_DISTANCE = 1159561.12717194
-SEDIMENT_POLYNOMIAL_STD_DEVIATION_DISTANCE = math.sqrt(SEDIMENT_POLYNOMIAL_VARIANCE_DISTANCE)
-SEDIMENT_POLYNOMIAL_MAX_AGE = 196.88598633
-SEDIMENT_POLYNOMIAL_MAX_DISTANCE = 3000.
 
 
 #
@@ -123,60 +94,46 @@ def generate_input_points_grid(
     return input_points
 
 
-# Returns a list of scalars (one per (lon, lat) point in the 'input_points' list).
-# For input points outside the scalar grid then scalars will be Nan (ie, 'math.isnan(scalar)' will return True).
-def get_positions_and_scalars(input_points, scalar_grid_filename, max_scalar=None):
+def gmt_grdtrack(
+        input,
+        *grid_filenames):
+    """
+    Samples one or more grid files at the specified locations.
     
-    input_points_data = ''.join('{0} {1}\n'.format(lon, lat) for lon, lat in input_points)
+    'input' is a list of (longitude, latitude, [other_values ...]) tuples where latitude and longitude are in degrees.
+    Should at least have 2-tuples (longitude, latitude) but 'grdtrack' allows extra columns.
+    
+    Returns a list of tuples of float values.
+    For example, if input was (longitude, latitude) tuples and one grid file specified then output is (longitude, latitude, sample) tuples.
+    If input was (longitude, latitude, value) tuples and two grid file specified then output is (longitude, latitude, value, sample_grid1, sample_grid2) tuples.
+    """
+    
+    # Create a multiline string (one line per lon/lat/value1/etc row).
+    location_data = ''.join(
+            ' '.join(str(item) for item in row) + '\n' for row in input)
 
     # The command-line strings to execute GMT 'grdtrack'.
-    grdtrack_command_line = ["gmt", "grdtrack", "-nl", "-G{0}".format(scalar_grid_filename)]
-    stdout_data = call_system_command(grdtrack_command_line, stdin=input_points_data.encode('utf-8'), return_stdout=True)
+    grdtrack_command_line = ["gmt", "grdtrack",
+        # Geographic input/output coordinates...
+        "-fg",
+        # Use linear interpolation, and avoid anti-aliasing...
+        "-nl+a+bg+t0.5"]
+    # One or more grid filenames to sample.
+    for grid_filename in grid_filenames:
+        grdtrack_command_line.append("-G{0}".format(grid_filename))
     
-    lon_lat_scalar_list = []
-    
-    # Read lon, lat and scalar values from the output of 'grdtrack'.
+    # Call the system command.
+    stdout_data = call_system_command(grdtrack_command_line, stdin=location_data, return_stdout=True)
+
+    # Extract the sampled values.
+    output_values = []
     for line in stdout_data.splitlines():
-        if (line.strip().startswith(b'#') or
-            line.strip().startswith(b'>')):
-            continue
-        
-        line_data = line.split()
-        num_values = len(line_data)
-        
-        # If just a line containing white-space then skip to next line.
-        if num_values == 0:
-            continue
-        
-        if num_values < 3:
-            print('Ignoring line "{0}" - has fewer than 3 white-space separated numbers.'.format(line), file=sys.stderr)
-            continue
-            
-        try:
-            # Convert strings to numbers.
-            lon = float(line_data[0])
-            lat = float(line_data[1])
-            
-            # The scalar got appended to the last column by 'grdtrack'.
-            scalar = float(line_data[-1])
-            
-            # If the point is outside the grid then the scalar grid will return 'NaN'.
-            if math.isnan(scalar):
-                # print('Ignoring line "{0}" - point is outside scalar grid.'.format(line), file=sys.stderr)
-                continue
-            
-            # Clamp to max value if requested.
-            if (max_scalar is not None and
-                scalar > max_scalar):
-                scalar = max_scalar
-            
-        except ValueError:
-            print('Ignoring line "{0}" - cannot read floating-point lon, lat and scalar values.'.format(line), file=sys.stderr)
-            continue
-        
-        lon_lat_scalar_list.append((lon, lat, scalar))
+        # Each line returned by GMT grdtrack contains "longitude latitude grid1_value [grid2_value ...]".
+        # Note that if GMT returns "NaN" then we'll return float('nan').
+        output_value = tuple(float(value) for value in line.split())
+        output_values.append(output_value)
     
-    return lon_lat_scalar_list
+    return output_values
 
 
 def read_curve(curve_filename):
@@ -255,129 +212,9 @@ def write_data(
     write_grid_file_from_xyz(grid_filename, xyz_filename, grid_spacing, latitude_range, longitude_range)
 
 
-#########################################################################################
-# GDH1 model (Stein and Stein 1992)                                                     #
-# "Model for the global variation in oceanic depth and heat flow with lithospheric age" #
-#########################################################################################
-
-
-def age_to_depth_GDH1(age):
-    """Convert age to depth (negative)."""
-    
-    if age < 0:
-        raise ValueError('Age must be non-negative')
-    elif age < 20:
-        return -(2600.0 + 365.0 * math.sqrt(age))
-    else:
-        return -(5651.0 - 2473.0 * math.exp(-0.0278 * age))
-
-
-def depth_to_age_GDH1(depth):
-    """
-    Convert depth (negative) to age.
-    
-    This is the reverse of GDH1 age to depth:
-        -depth = 2600 + 365 * age                       ; age <  20
-        -depth = 5651 - 2473 * e^(-0.0278 * age)        ; age >= 20
-    ...which is:
-        age = 0                                         ; -depth <  2600
-        age = ((-depth - 2600) / 365)^2                 ; -depth <  4232.5
-        age = ln((5651.0 + depth) / 2473.0) / -0.0278   ; -depth >= 4232.5
-    """
-    
-    if depth > 0:
-        raise ValueError('Depth must be negative')
-    elif depth > -2600.0:
-        # Minimum depth is 2600.
-        return 0.0
-    elif depth > -4232.5:  # depth at age 20
-        return math.pow((-depth - 2600.0) / 365.0, 2.0)
-    else:
-        return math.log((5651.0 + depth) / 2473.0) / -0.0278
-
-
-#############################################################################
-# Richards et al. (2020)                                                    #
-# "Structure and dynamics of the oceanic lithosphere-asthenosphere system". #
-#############################################################################
-
-_RHCW18_age_to_depth_function = None
-
-def age_to_depth_RHCW18(age):
-
-    # Create the model function the first time we're called.
-    global _RHCW18_age_to_depth_function
-    if _RHCW18_age_to_depth_function is None:
-        RHCW18_age_to_depth_file = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'input_data', 'RHCW18', 'depth-1333-130-2500.dat')
-        # Read the age-to-depth curve depth=function(age) from age-to-depth data file.
-        age_to_positive_depth_function = read_curve(RHCW18_age_to_depth_file)
-        def age_to_negative_depth_function(age):
-            return -age_to_positive_depth_function(age)
-        _RHCW18_age_to_depth_function = age_to_negative_depth_function
-
-    return _RHCW18_age_to_depth_function(age)
-
-
 #
-# Functions to predict, compact and isostatically correct sediment thickness.
+# Function to compact sediment thickness.
 #
-
-
-def predict_total_compacted_sediment_thickness(
-        age,
-        distance):
-    """
-    Predict total compacted sediment thickness from age and mean distance to passive margins.
-    """
-    
-    # We need to remove the mean and scale to unit variance (for the age and distance values)
-    # based on the machine learning training scaler.
-    # See http://scikit-learn.org/stable/modules/preprocessing.html#standardization-or-mean-removal-and-variance-scaling
-    age = (age - SEDIMENT_POLYNOMIAL_MEAN_AGE) / SEDIMENT_POLYNOMIAL_STD_DEVIATION_AGE
-    distance = (distance - SEDIMENT_POLYNOMIAL_MEAN_DISTANCE) / SEDIMENT_POLYNOMIAL_STD_DEVIATION_DISTANCE
-    
-    polynomial_features = [
-        1, age, distance,
-        age * age, age * distance, distance * distance,
-        age * age * age, age * age * distance, age * distance * distance, distance * distance * distance]
-    
-    # Evaluate the polynomial to get the log of the predicated sediment thickness.
-    log_sediment_thickness = sum(
-        SEDIMENT_THICKNESS_POLYNOMIAL_COEFFICIENTS[i] * polynomial_features[i]
-        for i in range(10))
-    
-    # Return the predicted sediment thickness (not as a logarithm).
-    return math.exp(log_sediment_thickness)
-
-
-def predict_total_decompacted_sediment_rate(
-        age,
-        distance):
-    """
-    Predict total decompacted sediment rate from age and mean distance to passive margins.
-    """
-    
-    # We need to remove the mean and scale to unit variance (for the age and distance values)
-    # based on the machine learning training scaler.
-    # See http://scikit-learn.org/stable/modules/preprocessing.html#standardization-or-mean-removal-and-variance-scaling
-    age = (age - SEDIMENT_POLYNOMIAL_MEAN_AGE) / SEDIMENT_POLYNOMIAL_STD_DEVIATION_AGE
-    distance = (distance - SEDIMENT_POLYNOMIAL_MEAN_DISTANCE) / SEDIMENT_POLYNOMIAL_STD_DEVIATION_DISTANCE
-    
-    polynomial_features = [
-        1, age, distance, age * age,
-        age * distance, distance * distance, age * age * age,
-        age * age * distance, age * distance * distance, distance * distance * distance]
-    
-    # Evaluate the polynomial to get the log of the predicated sedimentation rate.
-    log_sedimentation_rate = sum(
-        SEDIMENT_RATE_POLYNOMIAL_COEFFICIENTS[i] * polynomial_features[i]
-        for i in range(10))
-    
-    # Return the predicted sedimentation rate (not as a logarithm).
-    #
-    # NOTE: The factor of 10 converts cm/Ky to m/My (the polynomial generates units of cm/Ky).
-    return 10.0 * math.exp(log_sedimentation_rate)
-
 
 # Decompact total sediment thickness assuming a single lithology of the specified surface porosity and exponential decay.
 #
@@ -452,144 +289,71 @@ def compact_sediment_thickness(thickness, surface_porosity, porosity_exp_decay):
     return compacted_thickness
 
 
-def sediment_isostatic_correction(sediment_thickness, average_sediment_density):
-    """
-    Returns the isostatic correction of sediment.
-
-    The returned correction can be added to a known water depth to obtain the deeper isostatically compensated,
-    sediment-free water depth (tectonic subsidence). Or the correction could be subtracted from a
-    known tectonic subsidence (unloaded water depth) to get the depth at sediment/water interface.
-    """
-
-    return sediment_thickness * (DENSITY_MANTLE - average_sediment_density) / (DENSITY_MANTLE - DENSITY_WATER)
-
-
-def bathymetry_from_tectonic_subsidence_and_sedimentation(
-        age,
-        distance,
-        age_to_depth_curve,
-        dynamic_topography=0.0,
-        bathymetry_model_adjustment=0.0):
-    """
-    Calculates tectonic subsidence of ocean floor (from age/depth curve) and predicts total compacted
-    sediment thickness. Both are then combined to get bathymetry (with an offset correction).
-    """
-    
-    # Tectonic subsidence is just the age-to-depth model of ocean basement (ie, sediment free), plus optional dynamic topography.
-    tectonic_subsidence = age_to_depth_curve(age) + dynamic_topography
-    
-    # Predict total compacted sediment thickness for the current age and mean distance to passive margins.
-    total_compacted_sediment_thickness = predict_total_compacted_sediment_thickness(age, distance)
-    
-    # Load sediment on top of the sediment-free depth.
-    # Note we add (instead of subtract) because bathymetry and subsidence are negative here (instead of positive).
-    bathymetry = tectonic_subsidence + sediment_isostatic_correction(
-        total_compacted_sediment_thickness, AVERAGE_OCEAN_FLOOR_SEDIMENT_DENSITY)
-    
-    # print('ts, ct, it, b: ',
-    #         tectonic_subsidence,
-    #         total_compacted_sediment_thickness,
-    #         bathymetry - tectonic_subsidence,
-    #         bathymetry)
-    
-    # Add in the constant bathymetry offset (difference between actual bathymetry and bathymetry model).
-    return bathymetry + bathymetry_model_adjustment
-
-
-def predict_carbonate_decompacted_sediment_thickness(
-        lon_lat_age_distance_bathymetry_list,
-        age_to_depth_curve,
-        dynamic_topography_model,  # Can be None
+def calc_carbonate_decompacted_sediment_thickness(
+        lon_lat_age_bathymetry_list,
+        bathymetry_filename_components,
+        bathymetry_filename_oldest_time,
         topology_filenames,
         rotation_filenames,
         ccd_curve,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve,
         time):
     """
-    Predicts carbonate decompacted sediment thickness.
+    Calculates carbonate decompacted sediment thickness.
     
     Returns a list of accumulated carbonate sediment thicknesses (one for each input point).
     """
     
     # The number of ocean points at 'time'.
-    num_points = len(lon_lat_age_distance_bathymetry_list)
+    num_points = len(lon_lat_age_bathymetry_list)
 
-    # Extract input scalars.
+    # Extract input.
     locations = []  # (lon, lat) tuples
     points = []  # pygplates.PointOnSphere's
     ages = []
-    distances = []
-    bathymetrys = []
-    for lon, lat, age, distance, bathymetry in lon_lat_age_distance_bathymetry_list:
+    for lon, lat, age, bathymetry in lon_lat_age_bathymetry_list:
         locations.append((lon, lat))
         points.append(pygplates.PointOnSphere(lat, lon))
         ages.append(age)
-        distances.append(distance)
-        bathymetrys.append(bathymetry)
 
     # Initialise all carbonate deposition to zero.
     # We will accumulate carbonate deposition only above the CCD.
     carbonate_decompacted_sediment_thicknesses = [0.0] * num_points
     
-    # Initialise dynamic topography for all points at 'time'.
-    if dynamic_topography_model:
-        # Sample dynamic topography for all points in one call (for efficiency).
-        dynamic_topography_at_time = dynamic_topography_model.sample(time, locations)
-    
-        # Resolve the topologies for the current 'time'.
-        rotation_model = pygplates.RotationModel(rotation_filenames)
-        resolved_topologies = []
-        pygplates.resolve_topologies(topology_filenames, rotation_model, resolved_topologies, time)
+    # Resolve the topologies for the current 'time'.
+    rotation_model = pygplates.RotationModel(rotation_filenames)
+    resolved_topologies = []
+    pygplates.resolve_topologies(topology_filenames, rotation_model, resolved_topologies, time)
 
-        # Assign a plate ID to each point using the resolved topologies.
-        # Because we'll need to reconstruct each point prior to sampling dynamic topography.
-        resolved_topology_boundaries = [resolved_topology.get_resolved_boundary()
-                for resolved_topology in resolved_topologies]
-        resolved_topology_plate_ids = [resolved_topology.get_feature().get_reconstruction_plate_id()
-                for resolved_topology in resolved_topologies]
-        if use_ptt:
-            point_plate_ids = points_in_polygons.find_polygons(points, resolved_topology_boundaries, resolved_topology_plate_ids)
-            # Default to zero plate ID for any points that happen to fall outside all topologies (eg, in a sliver crack).
-            for point_index, plate_id in enumerate(point_plate_ids):
-                if plate_id is None:
-                    point_plate_ids[point_index] = 0
-        else:
-            # Default to zero plate ID for any points that happen to fall outside all topologies (eg, in a sliver crack).
-            point_plate_ids = [0] * len(points)
-            for point_index, point in enumerate(points):
-                for resolved_topology_index, resolved_topology_boundary in enumerate(resolved_topology_boundaries):
-                    if resolved_topology_boundary.is_point_in_polygon(point):
-                        point_plate_ids[point_index] = resolved_topology_plate_ids[resolved_topology_index]
-                        break
-
+    # Assign a plate ID to each point using the resolved topologies.
+    # Because we'll need to reconstruct each point prior to sampling dynamic topography.
+    resolved_topology_boundaries = [resolved_topology.get_resolved_boundary()
+            for resolved_topology in resolved_topologies]
+    resolved_topology_plate_ids = [resolved_topology.get_feature().get_reconstruction_plate_id()
+            for resolved_topology in resolved_topologies]
+    if USE_PTT:
+        point_plate_ids = points_in_polygons.find_polygons(points, resolved_topology_boundaries, resolved_topology_plate_ids)
+        # Default to zero plate ID for any points that happen to fall outside all topologies (eg, in a sliver crack).
+        for point_index, plate_id in enumerate(point_plate_ids):
+            if plate_id is None:
+                point_plate_ids[point_index] = 0
     else:
-        # Use zero values for dynamic topography when no dynamic topography model is present.
-        dynamic_topography_at_time = [0.0] * num_points
+        # Default to zero plate ID for any points that happen to fall outside all topologies (eg, in a sliver crack).
+        point_plate_ids = [0] * len(points)
+        for point_index, point in enumerate(points):
+            for resolved_topology_index, resolved_topology_boundary in enumerate(resolved_topology_boundaries):
+                if resolved_topology_boundary.is_point_in_polygon(point):
+                    point_plate_ids[point_index] = resolved_topology_plate_ids[resolved_topology_index]
+                    break
 
-    # Initialise the offsets between actual bathymetry and modelled bathymetry for all ocean points at 'time'.
-    bathymetry_model_adjustments = []
-    for point_index in range(num_points):
-
-        # Model bathymetry from tectonic subsidence and predicted total compacted sediment thickness.
-        bathymetry_from_model = bathymetry_from_tectonic_subsidence_and_sedimentation(
-                ages[point_index], distances[point_index], age_to_depth_curve, dynamic_topography_at_time[point_index])
-        
-        # There will be a difference between the actual bathymetry and the bathymetry modelled on
-        # age-to-depth subsidence. Assume this offset is constant over the lifetime of this parcel of
-        # ocean crust and use it to adjust the bathymetry obtained from age-to-depth model for younger ages.
-        bathymetry_model_adjustment = bathymetrys[point_index] - bathymetry_from_model
-
-        bathymetry_model_adjustments.append(bathymetry_model_adjustment)
-    
     # Time interval to reconstruct ocean points (from 'time' to each ocean point's time of appearance).
     # Currently set to 1 Myr.
     time_interval = 1.0
     
-    # The '0.5 * time_interval' is so we sample at interval mid-points for better integration accuracy.
-    reconstruction_time = time + 0.5 * time_interval
-    reconstructed_ages = [(age - 0.5 * time_interval) for age in ages]
+    reconstruction_time = time + time_interval
+    reconstructed_ages = [(age - time_interval) for age in ages]
     reconstructed_point_indices = list(range(num_points))
-    while True:
+    while reconstruction_time <= bathymetry_filename_oldest_time:
         # print(reconstruction_time); sys.stdout.flush()
 
         # Remove any ocean points that don't exist at the current reconstruction time
@@ -606,48 +370,40 @@ def predict_carbonate_decompacted_sediment_thickness(
         if not reconstructed_point_indices:
             break
         
-        # Get dynamic topography values for ocean points existing at the current reconstruction time.
-        if dynamic_topography_model:
-            # Reconstruct each point from 'time' to 'reconstruction_time'.
-            reconstructed_locations = []
-            for reconstructed_point_index in reconstructed_point_indices:
-                plate_id = point_plate_ids[reconstructed_point_index]
-                rotation = rotation_model.get_rotation(reconstruction_time, plate_id, time)  # from 'time' to 'reconstruction_time'
-                reconstructed_point = rotation * points[reconstructed_point_index]
-                reconstructed_lat, reconstructed_lon = reconstructed_point.to_lat_lon()
-                reconstructed_locations.append((reconstructed_lon, reconstructed_lat))
-            
-            # Sample dynamic topography for all reconstructed points in one call (for efficiency).
-            dynamic_topography_at_reconstruction_time = dynamic_topography_model.sample(
-                    reconstruction_time, reconstructed_locations)
+        # Reconstruct each point from 'time' to 'reconstruction_time'.
+        reconstructed_locations = []
+        for reconstructed_point_index in reconstructed_point_indices:
+            plate_id = point_plate_ids[reconstructed_point_index]
+            rotation = rotation_model.get_rotation(reconstruction_time, plate_id, time)  # from 'time' to 'reconstruction_time'
+            reconstructed_point = rotation * points[reconstructed_point_index]
+            reconstructed_lat, reconstructed_lon = reconstructed_point.to_lat_lon()
+            reconstructed_locations.append((reconstructed_lon, reconstructed_lat))
         
-        else:
-            # Use zero values for dynamic topography when no dynamic topography model is present.
-            dynamic_topography_at_reconstruction_time = [0.0] * len(reconstructed_point_indices)
-            
+        # Reconstructed bathymetry filename for the current reconstruction time.
+        bathymetry_filename_prefix, bathymetry_filename_decimal_places_in_time, bathymetry_filename_extension = bathymetry_filename_components
+        reconstructed_bathymetry_filename = bathymetry_filename_prefix + '{0:.{1}f}.{2}'.format(
+                reconstruction_time, bathymetry_filename_decimal_places_in_time, bathymetry_filename_extension)
+
+        # Sample reconstructed bathymetry at the reconstructed locations.
+        reconstructed_bathymetry_list = gmt_grdtrack(reconstructed_locations, reconstructed_bathymetry_filename)
+        reconstructed_bathymetrys = [reconstructed_bathymetry for _, _, reconstructed_bathymetry in reconstructed_bathymetry_list]
+        
         # The CCD depth associated with the reconstructed time.
         ccd_depth_at_reconstruction_time = ccd_curve(reconstruction_time)
 
         # Reconstruct bathymetry for all ocean points that exist at the current reconstruction time.
         for index, reconstructed_point_index in enumerate(reconstructed_point_indices):
             
-            # Calculate bathymetry from tectonic subsidence and predicted total compacted sediment thickness.
+            # Sample bathymetry at current reconstruction time.
             #
-            # This is modelled from tectonic subsidence and predicted total compacted sediment thickness.
-            #
-            # Note: We predict total compacted sediment thickness for the younger age but assume the mean distance
-            # to passive margins remains the same for younger ages (ie, is constant over the lifetime).
-            # This means we can just sample the pre-generated mean-distance grids and not have to worry about
-            # redoing those very lengthy calculations here.
-            bathymetry_at_reconstruction_time = bathymetry_from_tectonic_subsidence_and_sedimentation(
-                    reconstructed_ages[reconstructed_point_index],
-                    distances[reconstructed_point_index],
-                    age_to_depth_curve,
-                    dynamic_topography_at_reconstruction_time[index],  # Note the use of 'index' instead of 'reconstructed_point_index'
-                    bathymetry_model_adjustments[reconstructed_point_index])
+            # Note the use of 'index' instead of 'reconstructed_point_index'
+            bathymetry_at_reconstruction_time = reconstructed_bathymetrys[index]
+
+            # print('  ', time, reconstruction_time, bathymetry_at_reconstruction_time); sys.stdout.flush()
             
             # If modelled bathymetry is above the CCD depth then add a 1 Myr time interval to the time spent above CDD.
-            if bathymetry_at_reconstruction_time > ccd_depth_at_reconstruction_time:
+            if (not math.isnan(bathymetry_at_reconstruction_time) and
+                bathymetry_at_reconstruction_time > ccd_depth_at_reconstruction_time):
                 
                 # Linearly interpolate the carbonate sedimentation rate with depth between the maximum rate
                 # at CCD_DISSOLUTION_DISTANCE metres above the CDD and zero (at the CCD).
@@ -698,20 +454,18 @@ def predict_carbonate_decompacted_sediment_thickness(
     return carbonate_decompacted_sediment_thicknesses
 
 
-def predict_sedimentation(
+def calc_sedimentation(
         input_points,  # List of (lon, lat) tuples,
-        age_grid_filename,
-        distance_filename,
-        bathymetry_filename,
-        age_to_depth_curve,
-        dynamic_topography_model_name,  # Can be None
+        age_grid_filename_components,
+        bathymetry_filename_components,
+        bathymetry_filename_oldest_time,
         topology_filenames,
         rotation_filenames,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         time):
     """
-    Predicts decompacted and compacted carbonate thickness for each ocean basin grid point.
+    Calculates decompacted and compacted carbonate thickness for each ocean basin grid point.
     Also determines when carbonate is currently being deposited (ie, only at the current time).
     
     Returns: A 3-tuple of lists each containing 3-tuples of (lon, lat, value).
@@ -721,23 +475,21 @@ def predict_sedimentation(
              carbonate is currently being deposited (ie, only at the current time).
     """
     
-    # Get the input point ages, distances and bathymetries.
-    lon_lat_age_list = get_positions_and_scalars(input_points, age_grid_filename, SEDIMENT_POLYNOMIAL_MAX_AGE)
-    lon_lat_distance_list = get_positions_and_scalars(input_points, distance_filename, SEDIMENT_POLYNOMIAL_MAX_DISTANCE)
-    lon_lat_bathymetry_list = get_positions_and_scalars(input_points, bathymetry_filename)
-    if not lon_lat_age_list or not lon_lat_distance_list or not lon_lat_bathymetry_list:
-        return
+    age_grid_filename_prefix, age_grid_filename_decimal_places_in_time, age_grid_filename_extension = age_grid_filename_components
+    bathymetry_filename_prefix, bathymetry_filename_decimal_places_in_time, bathymetry_filename_extension = bathymetry_filename_components
     
-    # Merge the age, distance and bathymetry lists.
-    # Only keep points where there are age *and* distance *and* bathymetry values.
-    lon_lat_age_distance_bathymetry_list = []
-    age_dict = dict(((lon, lat), age) for lon, lat, age in lon_lat_age_list)
-    distance_dict = dict(((lon, lat), distance) for lon, lat, distance in lon_lat_distance_list)
-    for lon, lat, bathymetry in lon_lat_bathymetry_list:
-        if (lon, lat) in age_dict and (lon, lat) in distance_dict:
-            age = age_dict[(lon, lat)]
-            distance = distance_dict[(lon, lat)]
-            lon_lat_age_distance_bathymetry_list.append((lon, lat, age, distance, bathymetry))
+    # Age, distance and bathymetry filenames for the current time.
+    age_grid_filename = age_grid_filename_prefix + '{0:.{1}f}.{2}'.format(time, age_grid_filename_decimal_places_in_time, age_grid_filename_extension)
+    bathymetry_filename = bathymetry_filename_prefix + '{0:.{1}f}.{2}'.format(time, bathymetry_filename_decimal_places_in_time, bathymetry_filename_extension)
+    
+    # Get the input point ages and bathymetries.
+    lon_lat_age_list = gmt_grdtrack(input_points, age_grid_filename)
+    lon_lat_age_bathymetry_list = gmt_grdtrack(lon_lat_age_list, bathymetry_filename)
+    # Only keep points where there are both age *and* bathymetry values.
+    lon_lat_age_bathymetry_list = [(lon, lat, age, bathymetry)
+            for lon, lat, age, bathymetry in lon_lat_age_bathymetry_list if not math.isnan(age) and not math.isnan(bathymetry)]
+    if not lon_lat_age_bathymetry_list:
+        return
     
     # Read the CCD curve from the CCD file.
     # Returned curve is a function that accepts time and return depth.
@@ -746,18 +498,13 @@ def predict_sedimentation(
     # Read the maximum carbonate decompacted sedimentation rate curve from the file.
     # Returned curve is a function that accepts time and return sedimentation rate (in cm/ky).
     max_carbonate_decomp_sed_rate_cm_per_ky_curve = read_curve(max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename)
-
-    # Create the dynamic topography model (from model name) if requested.
-    if dynamic_topography_model_name:
-        dynamic_topography_model = pybacktrack.InterpolateDynamicTopography.create_from_bundled_model(dynamic_topography_model_name)
-    else:
-        dynamic_topography_model = None
     
     # Predict *decompacted* thickness.
     # We do this for all ocean basin points together since it's more efficient to sample dynamic topography for all points at once.
-    carbonate_decompacted_sediment_thickness_list = predict_carbonate_decompacted_sediment_thickness(
-        lon_lat_age_distance_bathymetry_list,
-        age_to_depth_curve, dynamic_topography_model,
+    carbonate_decompacted_sediment_thickness_list = calc_carbonate_decompacted_sediment_thickness(
+        lon_lat_age_bathymetry_list,
+        bathymetry_filename_components,
+        bathymetry_filename_oldest_time,
         topology_filenames, rotation_filenames,
         ccd_curve, max_carbonate_decomp_sed_rate_cm_per_ky_curve,
         time)
@@ -769,7 +516,7 @@ def predict_sedimentation(
     lon_lat_carbonate_decompacted_sediment_thickness_list = []
     lon_lat_carbonate_compacted_sediment_thickness_list = []
     lon_lat_carbonate_deposition_mask_list = []
-    for grid_sample_index, (lon, lat, age, distance, bathymetry) in enumerate(lon_lat_age_distance_bathymetry_list):
+    for grid_sample_index, (lon, lat, age, bathymetry) in enumerate(lon_lat_age_bathymetry_list):
         
         # Compact thickness.
         carbonate_decompacted_sediment_thickness = carbonate_decompacted_sediment_thickness_list[grid_sample_index]
@@ -793,33 +540,23 @@ def predict_sedimentation(
             lon_lat_carbonate_deposition_mask_list)
 
 
-def predict_sedimentation_and_write_data(
+def calc_sedimentation_and_write_data(
         input_points,
         time,
         latitude_range,  # (min, max) tuple
         longitude_range, # (min, max) tuple
         grid_spacing,
-        age_to_depth_curve,
-        dynamic_topography_model_name,  # Can be None
         topology_model_name,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
-        age_grid_filename_prefix,
-        age_grid_filename_extension,
-        distance_filename_prefix,
-        distance_filename_extension,
-        bathymetry_filename_prefix,
-        bathymetry_filename_extension,
+        age_grid_filename_components,
+        bathymetry_filename_components,
+        bathymetry_filename_oldest_time,
         carbonate_decompacted_sediment_thickness_filename_prefix,
         carbonate_compacted_sediment_thickness_filename_prefix,
         carbonate_deposition_mask_filename_prefix):
     
     print('Time: ', time)
-    
-    # Age, distance and bathymetry filenames for the current time.
-    age_grid_filename = age_grid_filename_prefix + '{0}.{1}'.format(time, age_grid_filename_extension)
-    distance_filename = distance_filename_prefix + '{0}.{1}'.format(time, distance_filename_extension)
-    bathymetry_filename = bathymetry_filename_prefix + '{0}.{1}'.format(time, bathymetry_filename_extension)
 
     # Read filenames listed in topology list file.
     topology_list_filename = os.path.join('input_data', 'topology_model', topology_model_name, 'topology_files.txt')
@@ -831,22 +568,20 @@ def predict_sedimentation_and_write_data(
     with open(rotation_list_filename, 'r') as rotation_list_file:
         rotation_filenames = rotation_list_file.read().splitlines()
     
-    # Predict carbonate decompacted and compacted sediment thickness at each input point that is in
-    # the age, distance and bathmetry grids (in unmasked regions of all three grids).
-    sediment_thickness_data = predict_sedimentation(
+    # Calculate carbonate decompacted and compacted sediment thickness at each input point that is in
+    # the age and bathmetry grids (in unmasked regions of both grids).
+    sediment_thickness_data = calc_sedimentation(
         input_points,
-        age_grid_filename,
-        distance_filename,
-        bathymetry_filename,
-        age_to_depth_curve,
-        dynamic_topography_model_name,
+        age_grid_filename_components,
+        bathymetry_filename_components,
+        bathymetry_filename_oldest_time,
         topology_filenames,
         rotation_filenames,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         time)
     if sediment_thickness_data is None:
-        print('Ignoring time "{0}" - no grid points inside age, distance and bathymetry grids.'.format(time), file=sys.stderr)
+        print('Ignoring time "{0}" - no grid points inside age and bathymetry grids.'.format(time), file=sys.stderr)
         return
     (carbonate_decompacted_sediment_thickness_data,
      carbonate_compacted_sediment_thickness_data,
@@ -880,11 +615,11 @@ def predict_sedimentation_and_write_data(
 #
 
 
-# Wraps around 'predict_sedimentation_and_write_data()' so can be used by multiprocessing.Pool.map()
+# Wraps around 'calc_sedimentation_and_write_data()' so can be used by multiprocessing.Pool.map()
 # which requires a single-argument function.
-def predict_sedimentation_and_write_data_parallel_pool_function(args):
+def calc_sedimentation_and_write_data_parallel_pool_function(args):
     try:
-        return predict_sedimentation_and_write_data(*args)
+        return calc_sedimentation_and_write_data(*args)
     except KeyboardInterrupt:
         pass
 
@@ -911,22 +646,17 @@ def low_priority():
         os.nice(1)
 
 
-def predict_sedimentation_and_write_data_for_times(
+def calc_sedimentation_and_write_data_for_times(
         times,
         latitude_range,  # (min, max) tuple
         longitude_range, # (min, max) tuple
         grid_spacing,
-        age_to_depth_curve,
-        dynamic_topography_model_name,  # Can be None
         topology_model_name,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
-        age_grid_filename_prefix,
-        age_grid_filename_extension,
-        distance_filename_prefix,
-        distance_filename_extension,
-        bathymetry_filename_prefix,
-        bathymetry_filename_extension,
+        age_grid_filename_components,
+        bathymetry_filename_components,
+        bathymetry_filename_oldest_time,
         carbonate_decompacted_sediment_thickness_filename_prefix,
         carbonate_compacted_sediment_thickness_filename_prefix,
         carbonate_deposition_mask_filename_prefix,
@@ -945,7 +675,7 @@ def predict_sedimentation_and_write_data_for_times(
         try:
             pool = multiprocessing.Pool(initializer=low_priority)
             pool_map_async_result = pool.map_async(
-                predict_sedimentation_and_write_data_parallel_pool_function,
+                calc_sedimentation_and_write_data_parallel_pool_function,
                 (
                     (
                         input_points,
@@ -953,17 +683,12 @@ def predict_sedimentation_and_write_data_for_times(
                         latitude_range,
                         longitude_range,
                         grid_spacing,
-                        age_to_depth_curve,
-                        dynamic_topography_model_name,
                         topology_model_name,
                         ccd_curve_filename,
                         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
-                        age_grid_filename_prefix,
-                        age_grid_filename_extension,
-                        distance_filename_prefix,
-                        distance_filename_extension,
-                        bathymetry_filename_prefix,
-                        bathymetry_filename_extension,
+                        age_grid_filename_components,
+                        bathymetry_filename_components,
+                        bathymetry_filename_oldest_time,
                         carbonate_decompacted_sediment_thickness_filename_prefix,
                         carbonate_compacted_sediment_thickness_filename_prefix,
                         carbonate_deposition_mask_filename_prefix
@@ -989,23 +714,18 @@ def predict_sedimentation_and_write_data_for_times(
         # Iterate over times and generate grids for each time.
         for time in times:
             # Predict carbonate decompacted and compacted sediment thickness, and write results to output grids.
-            predict_sedimentation_and_write_data(
+            calc_sedimentation_and_write_data(
                 input_points,
                 time,
                 latitude_range,
                 longitude_range,
                 grid_spacing,
-                age_to_depth_curve,
-                dynamic_topography_model_name,
                 topology_model_name,
                 ccd_curve_filename,
                 max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
-                age_grid_filename_prefix,
-                age_grid_filename_extension,
-                distance_filename_prefix,
-                distance_filename_extension,
-                bathymetry_filename_prefix,
-                bathymetry_filename_extension,
+                age_grid_filename_components,
+                bathymetry_filename_components,
+                bathymetry_filename_oldest_time,
                 carbonate_decompacted_sediment_thickness_filename_prefix,
                 carbonate_compacted_sediment_thickness_filename_prefix,
                 carbonate_deposition_mask_filename_prefix)
