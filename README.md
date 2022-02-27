@@ -4,9 +4,9 @@ Generate carbonate sediment thickness grids from age and bathymetry grids over t
 
 ## Dependencies
 
-- [GMT](https://www.generic-mapping-tools.org/download/) (and make sure the 'gmt' executable is in the PATH) - this is required for pyBacktrack anyway.
-- [PyGPlates](https://www.gplates.org/docs/pygplates/pygplates_getting_started.html#installation) - this is required for pyBacktrack anyway.
-- SciPy - this is required for pyBacktrack anyway.
+- [GMT](https://www.generic-mapping-tools.org/download/) (and make sure the 'gmt' executable is in the PATH).
+- [PyGPlates](https://www.gplates.org/docs/pygplates/pygplates_getting_started.html#installation).
+- SciPy.
 - And on Windows platforms also install [psutil](https://pypi.org/project/psutil/).
 
 ## Usage
