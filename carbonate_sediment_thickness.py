@@ -138,8 +138,9 @@ def gmt_grdtrack(
 
 def read_curve(curve_filename):
     
-    x = []
-    y = []
+    x_array = []
+    y_array = []
+    xmin, xmax = None, None
     with open(curve_filename, 'r') as curve_file:
         curve_reader = csv.reader(curve_file, delimiter='\t',)
         for row in curve_reader:
@@ -153,12 +154,23 @@ def read_curve(curve_filename):
                                  curve_filename,
                                  curve_reader.line_num - 1))
 
-            x.append(float(row[0]))
-            y.append(float(row[1]))
+            x = float(row[0])
+            y = float(row[1])
+            
+            x_array.append(x)
+            y_array.append(y)
+            
+            # Track the y values of the two endpoints (ie, min/max x).
+            if xmin is None or x < xmin:
+                xmin = x
+                y_at_xmin = y
+            if xmax is None or x > xmax:
+                xmax = x
+                y_at_xmax = y
     
     # Convert curve to a piecewise linear interpolating 1D function that accepts x and returns y.
-    # Return NaN on bounds error instead of raising ValueError...
-    return interp1d(x, y, bounds_error=False, fill_value='extrapolate')
+    # Return the y value at the boundary on bounds error instead of raising ValueError...
+    return interp1d(x_array, y_array, bounds_error=False, fill_value=(y_at_xmin, y_at_xmax))
 
 
 #
