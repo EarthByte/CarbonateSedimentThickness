@@ -33,7 +33,8 @@ use_all_cpu_cores = True
 # The topological model used to assign plate IDs to ocean crust at paleo times (including crust subducted at present day).
 #
 # This is the name of a sub-directory in 'input_data/topology_model/'.
-# Currently only '2019_v2' is supported.
+# Currently the only builtin model is '2019_v2'.
+# However you can provide your own topological model by following the instructions in the main README.
 topology_model_name = '2019_v2'
 
 # CCD (calcite compensation depth) curve filename.
