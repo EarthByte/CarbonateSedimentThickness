@@ -7,7 +7,7 @@ Generate carbonate sediment thickness grids from age and bathymetry grids over t
 - [GMT](https://www.generic-mapping-tools.org/download/) (and make sure the 'gmt' executable is in the PATH).
 - [PyGPlates](https://www.gplates.org/docs/pygplates/pygplates_getting_started.html#installation).
 - SciPy.
-- And on Windows platforms also install [psutil](https://pypi.org/project/psutil/).
+- And, on Windows platforms, optionally install [psutil](https://pypi.org/project/psutil/) so that this workflow can use CPU cores in the *background* (ie, below-normal priority).
 
 ## Usage
 
