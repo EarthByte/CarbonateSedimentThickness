@@ -307,6 +307,7 @@ def calc_carbonate_decompacted_sediment_thickness(
         bathymetry_filename_oldest_time,
         topology_filenames,
         rotation_filenames,
+        anchor_plate_id,
         ccd_curve,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve,
         time):
@@ -315,6 +316,9 @@ def calc_carbonate_decompacted_sediment_thickness(
     
     Returns a list of accumulated carbonate sediment thicknesses (one for each input point).
     """
+
+    # Create the rotation model from rotation files.
+    rotation_model = pygplates.RotationModel(rotation_filenames)
     
     # The number of ocean points at 'time'.
     num_points = len(lon_lat_age_bathymetry_list)
@@ -333,7 +337,6 @@ def calc_carbonate_decompacted_sediment_thickness(
     carbonate_decompacted_sediment_thicknesses = [0.0] * num_points
     
     # Resolve the topologies for the current 'time'.
-    rotation_model = pygplates.RotationModel(rotation_filenames)
     resolved_topologies = []
     pygplates.resolve_topologies(topology_filenames, rotation_model, resolved_topologies, time)
 
@@ -386,7 +389,12 @@ def calc_carbonate_decompacted_sediment_thickness(
         reconstructed_locations = []
         for reconstructed_point_index in reconstructed_point_indices:
             plate_id = point_plate_ids[reconstructed_point_index]
-            rotation = rotation_model.get_rotation(reconstruction_time, plate_id, time)  # from 'time' to 'reconstruction_time'
+            # Get the rotation from 'time' to present day (using anchor plate 0) and then
+            # from present day to 'reconstruction_time' (using anchor plate 'anchor_plate_id').
+            rotation = (
+                rotation_model.get_rotation(reconstruction_time, plate_id, 0, anchor_plate_id=anchor_plate_id) *
+                rotation_model.get_rotation(0, plate_id, time)
+            )
             reconstructed_point = rotation * points[reconstructed_point_index]
             reconstructed_lat, reconstructed_lon = reconstructed_point.to_lat_lon()
             reconstructed_locations.append((reconstructed_lon, reconstructed_lat))
@@ -473,6 +481,7 @@ def calc_sedimentation(
         bathymetry_filename_oldest_time,
         topology_filenames,
         rotation_filenames,
+        anchor_plate_id,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         time):
@@ -517,7 +526,8 @@ def calc_sedimentation(
         lon_lat_age_bathymetry_list,
         bathymetry_filename_components,
         bathymetry_filename_oldest_time,
-        topology_filenames, rotation_filenames,
+        topology_filenames,
+        rotation_filenames, anchor_plate_id,
         ccd_curve, max_carbonate_decomp_sed_rate_cm_per_ky_curve,
         time)
     
@@ -566,8 +576,9 @@ def calc_sedimentation_and_write_data(
         bathymetry_filename_oldest_time,
         carbonate_decompacted_sediment_thickness_filename_prefix,
         carbonate_compacted_sediment_thickness_filename_prefix,
-        carbonate_deposition_mask_filename_prefix):
-    
+        carbonate_deposition_mask_filename_prefix,
+        anchor_plate_id):
+
     print('Time: ', time)
 
     # Read filenames listed in topology list file.
@@ -589,6 +600,7 @@ def calc_sedimentation_and_write_data(
         bathymetry_filename_oldest_time,
         topology_filenames,
         rotation_filenames,
+        anchor_plate_id,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         time)
@@ -675,6 +687,7 @@ def calc_sedimentation_and_write_data_for_times(
         carbonate_decompacted_sediment_thickness_filename_prefix,
         carbonate_compacted_sediment_thickness_filename_prefix,
         carbonate_deposition_mask_filename_prefix,
+        anchor_plate_id,
         use_all_cpu_cores):
     
     print('Starting...')
@@ -706,7 +719,8 @@ def calc_sedimentation_and_write_data_for_times(
                         bathymetry_filename_oldest_time,
                         carbonate_decompacted_sediment_thickness_filename_prefix,
                         carbonate_compacted_sediment_thickness_filename_prefix,
-                        carbonate_deposition_mask_filename_prefix
+                        carbonate_deposition_mask_filename_prefix,
+                        anchor_plate_id
                     ) for time in times
                 ),
                 1)  # chunksize
@@ -743,6 +757,7 @@ def calc_sedimentation_and_write_data_for_times(
                 bathymetry_filename_oldest_time,
                 carbonate_decompacted_sediment_thickness_filename_prefix,
                 carbonate_compacted_sediment_thickness_filename_prefix,
-                carbonate_deposition_mask_filename_prefix)
+                carbonate_deposition_mask_filename_prefix,
+                anchor_plate_id)
     
     print('...finished.')
