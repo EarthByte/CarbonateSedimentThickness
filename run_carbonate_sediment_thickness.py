@@ -37,8 +37,9 @@ use_all_cpu_cores = True
 # However you can provide your own topological model by following the instructions in the main README.
 topology_model_name = '2019_v2'
 
-# The anchor plate ID used to reconstruct grid points to sample paleobathymetry grids.
-anchor_plate_id = 0
+# The reference frame (anchor plate ID) of the output carbonate grids.
+# The age and bathymetry grids use the default reference frame (anchor plate zero).
+carbonate_anchor_plate_id = 701
 
 # CCD (calcite compensation depth) curve filename.
 # This file maps time to CCD depth (negative).
@@ -100,5 +101,5 @@ if __name__ == '__main__':
         carbonate_decompacted_sediment_thickness_filename_prefix,
         carbonate_compacted_sediment_thickness_filename_prefix,
         carbonate_deposition_mask_filename_prefix,
-        anchor_plate_id,
+        carbonate_anchor_plate_id,
         use_all_cpu_cores)
