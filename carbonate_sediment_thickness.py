@@ -137,7 +137,11 @@ def read_curve(curve_filename):
     y_array = []
     xmin, xmax = None, None
     with open(curve_filename, 'r') as curve_file:
-        curve_reader = csv.reader(curve_file, delimiter='\t',)
+        # Detect the delimiter (eg, tab, space, comma).
+        csv_dialect = csv.Sniffer().sniff(curve_file.read(1024))
+        curve_file.seek(0)
+        # Read using the detected delimiter.
+        curve_reader = csv.reader(curve_file, csv_dialect)
         for row in curve_reader:
             # Skip comments.
             if (row[0].startswith("#") or
