@@ -1,6 +1,6 @@
 # Calculate carbonate sediment thickness
 
-Generate carbonate sediment thickness grids from age and bathymetry grids over the time range 0-230Ma (in 1My increments).
+Generate carbonate sediment thickness grids from age and bathymetry grids over the time range 0-170Ma (in 1My increments). Pelagic carbonate sediments did not exist before 170Ma.
 
 ## Dependencies
 
