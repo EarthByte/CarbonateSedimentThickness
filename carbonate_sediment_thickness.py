@@ -302,8 +302,8 @@ def compact_sediment_thickness(thickness, surface_porosity, porosity_exp_decay):
 
 def calc_carbonate_decompacted_sediment_thickness(
         input_points,
-        age_grid_filename_components,
-        bathymetry_filename_components,
+        age_grid_filenames_format,
+        bathymetry_grid_filenames_format,
         bathymetry_filename_oldest_time,
         topology_filenames,
         rotation_model,
@@ -362,12 +362,9 @@ def calc_carbonate_decompacted_sediment_thickness(
         input_lat, input_lon = input_point.to_lat_lon()
         input_points_in_default_reference_frame.append((input_lon, input_lat))
     
-    age_grid_filename_prefix, age_grid_filename_decimal_places_in_time, age_grid_filename_extension = age_grid_filename_components
-    bathymetry_filename_prefix, bathymetry_filename_decimal_places_in_time, bathymetry_filename_extension = bathymetry_filename_components
-    
     # Age, distance and bathymetry filenames for the current time.
-    age_grid_filename = age_grid_filename_prefix + '{0:.{1}f}.{2}'.format(time, age_grid_filename_decimal_places_in_time, age_grid_filename_extension)
-    bathymetry_filename = bathymetry_filename_prefix + '{0:.{1}f}.{2}'.format(time, bathymetry_filename_decimal_places_in_time, bathymetry_filename_extension)
+    age_grid_filename = age_grid_filenames_format.format(time)
+    bathymetry_filename = bathymetry_grid_filenames_format.format(time)
     
     # Get the ages and bathymetries at the input point locations (in default reference frame).
     ages = gmt_grdtrack(input_points_in_default_reference_frame, age_grid_filename)
@@ -428,9 +425,7 @@ def calc_carbonate_decompacted_sediment_thickness(
             reconstructed_locations.append((reconstructed_lon, reconstructed_lat))
         
         # Reconstructed bathymetry filename for the current reconstruction time.
-        bathymetry_filename_prefix, bathymetry_filename_decimal_places_in_time, bathymetry_filename_extension = bathymetry_filename_components
-        reconstructed_bathymetry_filename = bathymetry_filename_prefix + '{0:.{1}f}.{2}'.format(
-                reconstruction_time, bathymetry_filename_decimal_places_in_time, bathymetry_filename_extension)
+        reconstructed_bathymetry_filename = bathymetry_grid_filenames_format.format(reconstruction_time)
 
         # Sample reconstructed bathymetry at the reconstructed locations.
         reconstructed_bathymetrys = gmt_grdtrack(reconstructed_locations, reconstructed_bathymetry_filename)
@@ -506,8 +501,8 @@ def calc_carbonate_decompacted_sediment_thickness(
 
 def calc_sedimentation(
         input_points,  # List of (lon, lat) tuples,
-        age_grid_filename_components,
-        bathymetry_filename_components,
+        age_grid_filenames_format,
+        bathymetry_grid_filenames_format,
         bathymetry_filename_oldest_time,
         topology_filenames,
         rotation_model,
@@ -538,8 +533,8 @@ def calc_sedimentation(
     # We do this for all ocean basin points together since it's more efficient to sample reconstructed bathymetry for all points at once.
     lon_lat_age_bathymetry_carbonate_decompacted_sediment_thickness_list = calc_carbonate_decompacted_sediment_thickness(
         input_points,
-        age_grid_filename_components,
-        bathymetry_filename_components,
+        age_grid_filenames_format,
+        bathymetry_grid_filenames_format,
         bathymetry_filename_oldest_time,
         topology_filenames, rotation_model,
         ccd_curve, max_carbonate_decomp_sed_rate_cm_per_ky_curve,
@@ -587,8 +582,8 @@ def calc_sedimentation_and_write_data(
         topology_model_name,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
-        age_grid_filename_components,
-        bathymetry_filename_components,
+        age_grid_filenames_format,
+        bathymetry_grid_filenames_format,
         bathymetry_filename_oldest_time,
         carbonate_decompacted_sediment_thickness_filename_prefix,
         carbonate_compacted_sediment_thickness_filename_prefix,
@@ -614,8 +609,8 @@ def calc_sedimentation_and_write_data(
     # the age and bathmetry grids (in unmasked regions of both grids).
     sediment_thickness_data = calc_sedimentation(
         input_points,
-        age_grid_filename_components,
-        bathymetry_filename_components,
+        age_grid_filenames_format,
+        bathymetry_grid_filenames_format,
         bathymetry_filename_oldest_time,
         topology_filenames,
         rotation_model,
@@ -700,8 +695,8 @@ def calc_sedimentation_and_write_data_for_times(
         topology_model_name,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
-        age_grid_filename_components,
-        bathymetry_filename_components,
+        age_grid_filenames_format,
+        bathymetry_grid_filenames_format,
         bathymetry_filename_oldest_time,
         carbonate_decompacted_sediment_thickness_filename_prefix,
         carbonate_compacted_sediment_thickness_filename_prefix,
@@ -733,8 +728,8 @@ def calc_sedimentation_and_write_data_for_times(
                         topology_model_name,
                         ccd_curve_filename,
                         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
-                        age_grid_filename_components,
-                        bathymetry_filename_components,
+                        age_grid_filenames_format,
+                        bathymetry_grid_filenames_format,
                         bathymetry_filename_oldest_time,
                         carbonate_decompacted_sediment_thickness_filename_prefix,
                         carbonate_compacted_sediment_thickness_filename_prefix,
@@ -771,8 +766,8 @@ def calc_sedimentation_and_write_data_for_times(
                 topology_model_name,
                 ccd_curve_filename,
                 max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
-                age_grid_filename_components,
-                bathymetry_filename_components,
+                age_grid_filenames_format,
+                bathymetry_grid_filenames_format,
                 bathymetry_filename_oldest_time,
                 carbonate_decompacted_sediment_thickness_filename_prefix,
                 carbonate_compacted_sediment_thickness_filename_prefix,

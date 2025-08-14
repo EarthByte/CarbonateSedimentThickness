@@ -49,24 +49,21 @@ ccd_curve_filename = 'input_data/Boss_Wilkinson_1991_global_CCD.txt'
 # This file maps time to the maximum carbonate rate (at mid-ocean ridge depth; reduces to zero at CCD).
 max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename = 'input_data/sed_rate_v6.txt'
 
-# Location of age grids.
-# The full path to grids including filename, but with time and filename extension removed.
-age_grid_filename_prefix = '/home/michael/workspace/CarbonateSedimentThickness/Muller_etal_2019_Tectonics_v2.0_netCDF/Muller_etal_2019_Tectonics_v2.0_AgeGrid-'
-# The number of decimal places in the time when it is added to the filename prefix (and following by the filename extension).
-# Typically either 0 or 1.
-age_grid_filename_decimal_places_in_time = 0
-# Filename extension (typically 'nc' or 'grd').
-age_grid_filename_extension = 'nc'
+# Age grid files.
+#
+# The format string to generate age grid filenames (using the paleo times in 'times').
+# Use a string section like "{:.1f}" to for the paleo time. The ".1f" part means use the paleo time to one decimal place
+# (see Python\'s str.format() function) such that a time of 100 would be substituted as "100.0".
+# This string section will get replaced with each time in turn (to generate the actual age grid filenames).
+age_grid_filenames_format = 'C:/Users/jcann/Development/Usyd/data/EarthbytePlateModel/Muller_etal_2022/mantle-ref-frame-oceanic-crustal-agegrids_v1.2/Muller2022_SEAFLOOR_AGE_grid_{:.1f}Ma.nc'
 
-# Location of bathymetry grids.
-# The full path to grids including filename, but with time and filename extension removed.
-bathymetry_filename_prefix = '/home/michael/workspace/CarbonateSedimentThickness/Paleobathymetry_RHCW18/paleobathymetry_'
-# The number of decimal places in the time when it is added to the filename prefix (and following by the filename extension).
-# Typically either 0 or 1.
-bathymetry_filename_decimal_places_in_time = 0
-# Filename extension (typically 'nc' or 'grd').
-#bathymetry_filename_extension = 'grd'
-bathymetry_filename_extension = 'nc'
+# Bathymetry grid files.
+#
+# The format string to generate bathymetry grid filenames (using the paleo times in 'times').
+# Use a string section like "{:.1f}" to for the paleo time. The ".1f" part means use the paleo time to one decimal place
+# (see Python\'s str.format() function) such that a time of 100 would be substituted as "100.0".
+# This string section will get replaced with each time in turn (to generate the actual bathymetry filenames).
+bathymetry_grid_filenames_format = 'C:/Users/jcann/Development/Usyd/data/EarthbytePlateModel/Wright_etal_2020_ESR/Grids-Muller_etal_2019_v2.0/Paleobathymetry_RHCW18-Muller++_2019_v2.0/paleobathymetry_{:.0f}Ma.nc'
 
 # Time of the oldest bathymetry grid.
 bathymetry_filename_oldest_time = 230
@@ -95,8 +92,8 @@ if __name__ == '__main__':
         topology_model_name,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
-        (age_grid_filename_prefix, age_grid_filename_decimal_places_in_time, age_grid_filename_extension),
-        (bathymetry_filename_prefix, bathymetry_filename_decimal_places_in_time, bathymetry_filename_extension),
+        age_grid_filenames_format,
+        bathymetry_grid_filenames_format,
         bathymetry_filename_oldest_time,
         carbonate_decompacted_sediment_thickness_filename_prefix,
         carbonate_compacted_sediment_thickness_filename_prefix,
