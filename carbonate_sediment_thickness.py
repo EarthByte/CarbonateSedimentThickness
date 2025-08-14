@@ -303,7 +303,9 @@ def compact_sediment_thickness(thickness, surface_porosity, porosity_exp_decay):
 def calc_carbonate_decompacted_sediment_thickness(
         input_points,
         age_grid_filenames_format,
+        age_grid_anchor_plate_id,
         bathymetry_grid_filenames_format,
+        bathymetry_grid_anchor_plate_id,
         bathymetry_filename_oldest_time,
         topology_filenames,
         rotation_model,
@@ -347,28 +349,40 @@ def calc_carbonate_decompacted_sediment_thickness(
                     point_plate_ids[point_index] = resolved_topology_plate_ids[resolved_topology_index]
                     break
 
-    # Convert the points from the carbonate reference frame to the default reference frame so
-    # that we can sample the age and bathymetry grids at 'time' (using the default reference frame).
-    input_points_in_default_reference_frame = []
-    for point_index, (input_longitude, input_latitude) in enumerate(input_points):
+    # Convert the points from the carbonate reference frame to the age grid and bathymetry reference frames so
+    # that we can sample the age and bathymetry grids at 'time' (using their respective reference frames).
+    input_points_in_age_grid_reference_frame = []
+    input_points_in_bathymetry_grid_reference_frame = []
+    for point_index, point in enumerate(points):
         plate_id = point_plate_ids[point_index]
-        # Get the rotation from 'time' to present day (using anchor plate 'carbonate_anchor_plate_id') and then
-        # from present day back to 'time' (using anchor plate zero).
-        rotation = (
-            rotation_model.get_rotation(time, plate_id, 0) *
-            rotation_model.get_rotation(0, plate_id, time, anchor_plate_id=carbonate_anchor_plate_id)
-        )
-        input_point = rotation * pygplates.PointOnSphere(input_latitude, input_longitude)
-        input_lat, input_lon = input_point.to_lat_lon()
-        input_points_in_default_reference_frame.append((input_lon, input_lat))
+
+        # Get the rotation from 'time' to present day using anchor plate 'carbonate_anchor_plate_id'.
+        rotation_from_carbonate_grid_reference_frame = rotation_model.get_rotation(
+            0, plate_id, time, anchor_plate_id=carbonate_anchor_plate_id)
+        # Get the rotation from present day back to 'time' using anchor plate 'age_grid_anchor_plate_id'.
+        rotation_to_age_grid_reference_frame = rotation_model.get_rotation(
+            time, plate_id, 0, anchor_plate_id=age_grid_anchor_plate_id)
+        # Get the rotation from present day back to 'time' using anchor plate 'bathymetry_grid_anchor_plate_id'.
+        rotation_to_bathymetry_grid_reference_frame = rotation_model.get_rotation(
+            time, plate_id, 0, anchor_plate_id=bathymetry_grid_anchor_plate_id)
+
+        input_lat_lon_point_in_age_grid_reference_frame = (
+            rotation_to_age_grid_reference_frame * rotation_from_carbonate_grid_reference_frame * point)
+        input_points_in_age_grid_reference_frame.append(
+            input_lat_lon_point_in_age_grid_reference_frame.to_lat_lon()[::-1])  # swap (lat, lon)
+        
+        input_lat_lon_point_in_bathymetry_grid_reference_frame = (
+            rotation_to_bathymetry_grid_reference_frame * rotation_from_carbonate_grid_reference_frame * point)
+        input_points_in_bathymetry_grid_reference_frame.append(
+            input_lat_lon_point_in_bathymetry_grid_reference_frame.to_lat_lon()[::-1])  # swap (lat, lon)
     
     # Age, distance and bathymetry filenames for the current time.
     age_grid_filename = age_grid_filenames_format.format(time)
     bathymetry_filename = bathymetry_grid_filenames_format.format(time)
     
-    # Get the ages and bathymetries at the input point locations (in default reference frame).
-    ages = gmt_grdtrack(input_points_in_default_reference_frame, age_grid_filename)
-    bathymetries = gmt_grdtrack(input_points_in_default_reference_frame, bathymetry_filename)
+    # Get the ages and bathymetries at the input point locations (in their respective reference frames).
+    ages = gmt_grdtrack(input_points_in_age_grid_reference_frame, age_grid_filename)
+    bathymetries = gmt_grdtrack(input_points_in_bathymetry_grid_reference_frame, bathymetry_filename)
 
     # Initialise all carbonate deposition to zero.
     # We will accumulate carbonate deposition only above the CCD.
@@ -409,26 +423,30 @@ def calc_carbonate_decompacted_sediment_thickness(
         
         # Reconstruct each point from 'time' to 'reconstruction_time'.
         #
-        # And convert them from the carbonate reference frame to the default reference frame so that
-        # we can sample the bathymetry grids at 'reconstruction_time' (using the default reference frame).
-        reconstructed_locations = []
+        # And convert them from the carbonate reference frame to the bathymetry reference frame so that
+        # we can sample the bathymetry grid at 'reconstruction_time' (using its reference frame).
+        reconstructed_points_in_bathymetry_grid_reference_frame = []
         for reconstructed_point_index in reconstructed_point_indices:
             plate_id = point_plate_ids[reconstructed_point_index]
-            # Get the rotation from 'time' to present day (using anchor plate 'carbonate_anchor_plate_id') and then
-            # from present day to 'reconstruction_time' (using anchor plate zero).
-            rotation = (
-                rotation_model.get_rotation(reconstruction_time, plate_id, 0) *
-                rotation_model.get_rotation(0, plate_id, time, anchor_plate_id=carbonate_anchor_plate_id)
-            )
-            reconstructed_point = rotation * points[reconstructed_point_index]
-            reconstructed_lat, reconstructed_lon = reconstructed_point.to_lat_lon()
-            reconstructed_locations.append((reconstructed_lon, reconstructed_lat))
+            point = points[reconstructed_point_index]
+
+            # Get the rotation from 'time' to present day using anchor plate 'carbonate_anchor_plate_id'.
+            rotation_from_carbonate_grid_reference_frame = rotation_model.get_rotation(
+                0, plate_id, time, anchor_plate_id=carbonate_anchor_plate_id)
+            # Get the rotation from present day back to 'reconstruction_time' using anchor plate 'bathymetry_grid_anchor_plate_id'.
+            rotation_to_bathymetry_grid_reference_frame = rotation_model.get_rotation(
+                reconstruction_time, plate_id, 0, anchor_plate_id=bathymetry_grid_anchor_plate_id)
+            
+            reconstructed_lat_lon_point_in_bathymetry_grid_reference_frame = (
+                rotation_to_bathymetry_grid_reference_frame * rotation_from_carbonate_grid_reference_frame * point)
+            reconstructed_points_in_bathymetry_grid_reference_frame.append(
+                reconstructed_lat_lon_point_in_bathymetry_grid_reference_frame.to_lat_lon()[::-1])  # swap (lat, lon)
         
         # Reconstructed bathymetry filename for the current reconstruction time.
         reconstructed_bathymetry_filename = bathymetry_grid_filenames_format.format(reconstruction_time)
 
         # Sample reconstructed bathymetry at the reconstructed locations.
-        reconstructed_bathymetrys = gmt_grdtrack(reconstructed_locations, reconstructed_bathymetry_filename)
+        reconstructed_bathymetrys = gmt_grdtrack(reconstructed_points_in_bathymetry_grid_reference_frame, reconstructed_bathymetry_filename)
         
         # The CCD depth associated with the reconstructed time.
         ccd_depth_at_reconstruction_time = ccd_curve(reconstruction_time)
@@ -502,7 +520,9 @@ def calc_carbonate_decompacted_sediment_thickness(
 def calc_sedimentation(
         input_points,  # List of (lon, lat) tuples,
         age_grid_filenames_format,
+        age_grid_anchor_plate_id,
         bathymetry_grid_filenames_format,
+        bathymetry_grid_anchor_plate_id,
         bathymetry_filename_oldest_time,
         topology_filenames,
         rotation_model,
@@ -534,7 +554,9 @@ def calc_sedimentation(
     lon_lat_age_bathymetry_carbonate_decompacted_sediment_thickness_list = calc_carbonate_decompacted_sediment_thickness(
         input_points,
         age_grid_filenames_format,
+        age_grid_anchor_plate_id,
         bathymetry_grid_filenames_format,
+        bathymetry_grid_anchor_plate_id,
         bathymetry_filename_oldest_time,
         topology_filenames, rotation_model,
         ccd_curve, max_carbonate_decomp_sed_rate_cm_per_ky_curve,
@@ -583,7 +605,9 @@ def calc_sedimentation_and_write_data(
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         age_grid_filenames_format,
+        age_grid_anchor_plate_id,
         bathymetry_grid_filenames_format,
+        bathymetry_grid_anchor_plate_id,
         bathymetry_filename_oldest_time,
         carbonate_decompacted_sediment_thickness_filename_prefix,
         carbonate_compacted_sediment_thickness_filename_prefix,
@@ -610,7 +634,9 @@ def calc_sedimentation_and_write_data(
     sediment_thickness_data = calc_sedimentation(
         input_points,
         age_grid_filenames_format,
+        age_grid_anchor_plate_id,
         bathymetry_grid_filenames_format,
+        bathymetry_grid_anchor_plate_id,
         bathymetry_filename_oldest_time,
         topology_filenames,
         rotation_model,
@@ -696,7 +722,9 @@ def calc_sedimentation_and_write_data_for_times(
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         age_grid_filenames_format,
+        age_grid_anchor_plate_id,
         bathymetry_grid_filenames_format,
+        bathymetry_grid_anchor_plate_id,
         bathymetry_filename_oldest_time,
         carbonate_decompacted_sediment_thickness_filename_prefix,
         carbonate_compacted_sediment_thickness_filename_prefix,
@@ -729,7 +757,9 @@ def calc_sedimentation_and_write_data_for_times(
                         ccd_curve_filename,
                         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
                         age_grid_filenames_format,
+                        age_grid_anchor_plate_id,
                         bathymetry_grid_filenames_format,
+                        bathymetry_grid_anchor_plate_id,
                         bathymetry_filename_oldest_time,
                         carbonate_decompacted_sediment_thickness_filename_prefix,
                         carbonate_compacted_sediment_thickness_filename_prefix,
@@ -767,7 +797,9 @@ def calc_sedimentation_and_write_data_for_times(
                 ccd_curve_filename,
                 max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
                 age_grid_filenames_format,
+                age_grid_anchor_plate_id,
                 bathymetry_grid_filenames_format,
+                bathymetry_grid_anchor_plate_id,
                 bathymetry_filename_oldest_time,
                 carbonate_decompacted_sediment_thickness_filename_prefix,
                 carbonate_compacted_sediment_thickness_filename_prefix,

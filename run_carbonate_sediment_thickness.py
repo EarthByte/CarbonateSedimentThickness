@@ -37,8 +37,7 @@ use_all_cpu_cores = True
 # However you can provide your own topological model by following the instructions in the main README.
 topology_model_name = '2019_v2'
 
-# The reference frame (anchor plate ID) of the output carbonate grids.
-# The age and bathymetry grids use the default reference frame (anchor plate zero).
+# The reference frame (anchor plate ID) of the *output* carbonate grids.
 carbonate_anchor_plate_id = 701
 
 # CCD (calcite compensation depth) curve filename.
@@ -57,6 +56,9 @@ max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename = 'input_data/sed_rate_v6
 # This string section will get replaced with each time in turn (to generate the actual age grid filenames).
 age_grid_filenames_format = 'C:/Users/jcann/Development/Usyd/data/EarthbytePlateModel/Muller_etal_2022/mantle-ref-frame-oceanic-crustal-agegrids_v1.2/Muller2022_SEAFLOOR_AGE_grid_{:.1f}Ma.nc'
 
+# The reference frame (anchor plate ID) of the *input* age grids.
+age_grid_anchor_plate_id = 0
+
 # Bathymetry grid files.
 #
 # The format string to generate bathymetry grid filenames (using the paleo times in 'times').
@@ -64,6 +66,9 @@ age_grid_filenames_format = 'C:/Users/jcann/Development/Usyd/data/EarthbytePlate
 # (see Python\'s str.format() function) such that a time of 100 would be substituted as "100.0".
 # This string section will get replaced with each time in turn (to generate the actual bathymetry filenames).
 bathymetry_grid_filenames_format = 'C:/Users/jcann/Development/Usyd/data/EarthbytePlateModel/Wright_etal_2020_ESR/Grids-Muller_etal_2019_v2.0/Paleobathymetry_RHCW18-Muller++_2019_v2.0/paleobathymetry_{:.0f}Ma.nc'
+
+# The reference frame (anchor plate ID) of the *input* bathymetry grids.
+bathymetry_grid_anchor_plate_id = 0
 
 # Time of the oldest bathymetry grid.
 bathymetry_filename_oldest_time = 230
@@ -93,7 +98,9 @@ if __name__ == '__main__':
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         age_grid_filenames_format,
+        age_grid_anchor_plate_id,
         bathymetry_grid_filenames_format,
+        bathymetry_grid_anchor_plate_id,
         bathymetry_filename_oldest_time,
         carbonate_decompacted_sediment_thickness_filename_prefix,
         carbonate_compacted_sediment_thickness_filename_prefix,
