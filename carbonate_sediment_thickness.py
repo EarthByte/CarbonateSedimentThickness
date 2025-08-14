@@ -601,7 +601,8 @@ def calc_sedimentation_and_write_data(
         latitude_range,  # (min, max) tuple
         longitude_range, # (min, max) tuple
         grid_spacing,
-        topology_model_name,
+        rotation_filenames,
+        topology_filenames,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         age_grid_filenames_format,
@@ -615,16 +616,6 @@ def calc_sedimentation_and_write_data(
         carbonate_anchor_plate_id):
     
     print('Time: ', time)
-
-    # Read filenames listed in topology list file.
-    topology_list_filename = os.path.join('input_data', 'topology_model', topology_model_name, 'topology_files.txt')
-    with open(topology_list_filename, 'r') as topology_list_file:
-        topology_filenames = topology_list_file.read().splitlines()
-
-    # Read filenames listed in rotation list file.
-    rotation_list_filename = os.path.join('input_data', 'topology_model', topology_model_name, 'rotation_files.txt')
-    with open(rotation_list_filename, 'r') as rotation_list_file:
-        rotation_filenames = rotation_list_file.read().splitlines()
 
     # Create the rotation model from the rotation files.
     rotation_model = pygplates.RotationModel(rotation_filenames)
@@ -718,7 +709,8 @@ def calc_sedimentation_and_write_data_for_times(
         latitude_range,  # (min, max) tuple
         longitude_range, # (min, max) tuple
         grid_spacing,
-        topology_model_name,
+        rotation_filenames,
+        topology_filenames,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         age_grid_filenames_format,
@@ -753,7 +745,8 @@ def calc_sedimentation_and_write_data_for_times(
                         latitude_range,
                         longitude_range,
                         grid_spacing,
-                        topology_model_name,
+                        rotation_filenames,
+                        topology_filenames,
                         ccd_curve_filename,
                         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
                         age_grid_filenames_format,
@@ -793,7 +786,8 @@ def calc_sedimentation_and_write_data_for_times(
                 latitude_range,
                 longitude_range,
                 grid_spacing,
-                topology_model_name,
+                rotation_filenames,
+                topology_filenames,
                 ccd_curve_filename,
                 max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
                 age_grid_filenames_format,
