@@ -6,6 +6,7 @@ Generate carbonate sediment thickness grids from age and bathymetry grids over t
 
 - [GMT](https://www.generic-mapping-tools.org/download/) (and make sure the 'gmt' executable is in the PATH).
 - [PyGPlates](https://www.gplates.org/docs/pygplates/pygplates_getting_started.html#installation).
+- [PlateModelManager](https://pypi.org/project/plate-model-manager/) (note that installing [GPlately](https://gplates.github.io/gplately/stable/sphinx/html/index.html) also installs this).
 - SciPy.
 - And, on Windows platforms, optionally install [psutil](https://pypi.org/project/psutil/) so that this workflow can use CPU cores in the *background* (ie, below-normal priority).
 
@@ -31,7 +32,7 @@ The age grids can be downloaded from https://www.earthbyte.org/webdav/ftp/Data_C
 
 The bathymetry grids can be downloaded from https://www.earthbyte.org/webdav/ftp/Data_Collections/Wright_etal_2020_ESR/Grids/Paleobathymetry_RHCW18/ .
 
-You can either use the supplied topological model (in local directory `input_data/topology_model/2019_v2/`) or provide your own. If you're using the supplied model then you don't need to do anything. If you're providing your own model then you'll need to list your rotation and topology files in the `rotation_filenames` and `topology_filenames` variables (in `carbonate_sediment_thickness.ipynb` or `run_carbonate_sediment_thickness.py`). And note that you'll likely need to use *absolute* paths in your filenames (unlike the supplied model).
+You can either use the supplied topological model (in local directory `input_data/topology_model/2019_v2/`), or use ``PlateModelManager`` to provide one, or provide your own. If you're using the supplied model then you don't need to do anything. If you're using ``PlateModelManager`` then you just need to specify the model name (and set ``using_local_model`` to ``False``). If you're providing your own model then you'll need to list your rotation and topology files in the `rotation_filenames` and `topology_filenames` variables (in `carbonate_sediment_thickness.ipynb` or `run_carbonate_sediment_thickness.py`) - and note that you'll likely need to use *absolute* paths in your filenames (unlike the supplied model).
 
 
 ## Reference

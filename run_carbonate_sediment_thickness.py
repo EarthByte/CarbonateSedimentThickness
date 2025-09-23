@@ -5,6 +5,7 @@
 #
 
 import carbonate_sediment_thickness
+import glob
 import os.path
 import os
 
@@ -33,71 +34,22 @@ use_all_cpu_cores = True
 # The topological model used to assign plate IDs to ocean crust at paleo times (including crust subducted at present day).
 #
 # Currently the only builtin model is provided in the sub-directory 'input_data/topology_model/2019_v2/'.
-# However you can provide your own topological model.
-rotation_filenames = [
-    'input_data/topology_model/2019_v2/Alps_Mesh_Rotations_2019_v2.rot',
-    'input_data/topology_model/2019_v2/Andes_Flat_Slabs_Rotations_2019_v2.rot',
-    'input_data/topology_model/2019_v2/Andes_Rotations_2019_v2.rot',
-    'input_data/topology_model/2019_v2/Australia_Antarctica_Mesh_Rotations_2019_v2.rot',
-    'input_data/topology_model/2019_v2/Australia_North_Zealandia_Rotations_2019_v2.rot',
-    'input_data/topology_model/2019_v2/Eurasia_Arabia_Mesh_Rotations_2019_v2.rot',
-    'input_data/topology_model/2019_v2/Global_250-0Ma_Rotations_2019_v2.rot',
-    'input_data/topology_model/2019_v2/North_America_Flat_Slabs_Rotations_2019_v2.rot',
-    'input_data/topology_model/2019_v2/North_America_Mesh_Rotations_2019_v2.rot',
-    'input_data/topology_model/2019_v2/North_China_Mesh_Rotations_2019_v2.rot',
-    'input_data/topology_model/2019_v2/South_Atlantic_Rotations_2019_v2.rot',
-    'input_data/topology_model/2019_v2/Southeast_Asia_Rotations_2019_v2.rot',
-]
-topology_filenames = [
-    'input_data/topology_model/2019_v2/Alps_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Alps_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/America_Anyui_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/America_Anyui_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Andes_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Andes_Flat_Slabs_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Andes_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Arctic_Eurasia_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Arctic_Eurasia_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Australia_Antarctica_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Australia_Antarctica_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Australia_North_Zealandia_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Australia_North_Zealandia_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Baja_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Coral_Sea_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Coral_Sea_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/East_African_Rift_Deforming_Mesh_and_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/East-West_Gondwana_Deforming_Mesh_and_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Ellesmere__Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Eurasia_Arabia_Deforming_Mesh_and_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Global_Mesozoic-Cenozoic_PlateBoundaries_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Greater_India_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Greater_India_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/North_America_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/North_Atlantic_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/North_Atlantic_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/North_China_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/North_China_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Northern_Andes_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Northern_Andes_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Papua_New_Guinea_Deforming_Meshes_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Papua_New_Guinea_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Scotia_Deforming_Mesh_and_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Siberia_Eurasia_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Siberia_Eurasia_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/South_Atlantic_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/South_Atlantic_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/South_China_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/South_China_Sea_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/South_Zealandia_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/South_Zealandia_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Southeast_Asia_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Southeast_Asia_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/West_Antarctic_Zealandia_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/West_Antarctica_Zealandia_Mesh_Topologies_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Western_North_America_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Western_Tethys_Deforming_Mesh_2019_v2.gpmlz',
-    'input_data/topology_model/2019_v2/Western_Tethys_Tectonic_Boundary_Topologies_2019_v2.gpmlz',
-]
+#
+# However you can provide your own topological model either by listing the rotation and topology files or
+# using plate-model-manager (which will download a plate model to the 'plate-model-repo' directory).
+using_local_model = True
+if using_local_model:
+    rotation_filenames = glob.glob(os.path.join('input_data', 'topology_model', '2019_v2', '*.rot'))
+    topology_filenames = glob.glob(os.path.join('input_data', 'topology_model', '2019_v2', '*.gpmlz'))
+else:
+    plate_model_name = "Muller2019"
+    # Obtain rotation and topology files from Muller et al. (2019) via the plate model manager.
+    #
+    from plate_model_manager import PlateModelManager
+    plate_model_manager = PlateModelManager()
+    plate_model = plate_model_manager.get_model(plate_model_name, data_dir="plate-model-repo")
+    rotation_filenames = plate_model.get_rotation_model()
+    topology_filenames = plate_model.get_topologies()
 
 # The reference frame (anchor plate ID) of the *output* carbonate grids.
 carbonate_anchor_plate_id = 701
