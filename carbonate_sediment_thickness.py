@@ -609,6 +609,11 @@ def calc_sedimentation_and_write_data(
         carbonate_anchor_plate_id):
     
     print('Time: ', time)
+
+    # Allow 'topological_model' to be passed as a tuple of (topology_filenames, rotation_filenames, anchor_plate_id).
+    if not isinstance(topological_model, pygplates.TopologicalModel):
+        topology_filenames, rotation_filenames, carbonate_anchor_plate_id = topological_model
+        topological_model = pygplates.TopologicalModel(topology_filenames, rotation_filenames, anchor_plate_id=carbonate_anchor_plate_id)
     
     # Calculate carbonate decompacted and compacted sediment thickness at each input point that is in
     # the age and bathmetry grids (in unmasked regions of both grids).
@@ -717,14 +722,16 @@ def calc_sedimentation_and_write_data_for_times(
     
     # Generate a uniform global grid of lat/lon points.
     input_points = generate_input_points_grid(grid_spacing, latitude_range, longitude_range)
-
-    # Create a topological model up front to reuse topological snapshots across reconstruction times.
-    topological_model = pygplates.TopologicalModel(
-        topology_filenames, rotation_filenames, anchor_plate_id=carbonate_anchor_plate_id)
     
     # Either distribute each time iteration (over array of times) across all CPU cores, or
     # run time iteration loop serially (ie, use only one CPU core).
     if use_all_cpu_cores:
+
+        # Instead of creating a topological model we pass in the data to create one.
+        # This is because pyGPlates currently is a bit slow when pickling these objects.
+        # Also, we can't reuse topological snapshots across different CPU cores since
+        # a separate pygplates.TopologicalModel instance is created/pickled per CPU core.
+        topological_model = topology_filenames, rotation_filenames, carbonate_anchor_plate_id
         
         # Split the workload across the CPUs.
         try:
@@ -768,6 +775,10 @@ def calc_sedimentation_and_write_data_for_times(
             pool.join()
 
     else:  # process in serial...
+
+        # Create a topological model up front to reuse topological snapshots across reconstruction times.
+        topological_model = pygplates.TopologicalModel(
+            topology_filenames, rotation_filenames, anchor_plate_id=carbonate_anchor_plate_id)
 
         # Iterate over times and generate grids for each time.
         for time in times:
