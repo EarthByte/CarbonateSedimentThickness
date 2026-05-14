@@ -28,13 +28,6 @@ import csv
 import math
 import multiprocessing
 import os.path
-# We'll use the slower path instead of using the faster PlateTectonicTools to assign plate IDs.
-# This removes our dependency on PlateTectonicTools.
-# The increased time does not affect the total running time very much
-# (most of the time is spent calculating bathymetry from subsidence model).
-USE_PTT = False
-if USE_PTT:
-    from ptt.utils import points_in_polygons
 import pygplates
 from scipy.interpolate import interp1d
 import sys
@@ -307,8 +300,7 @@ def calc_carbonate_decompacted_sediment_thickness(
         bathymetry_grid_filenames_format,
         bathymetry_grid_anchor_plate_id,
         bathymetry_filename_oldest_time,
-        topology_filenames,
-        rotation_model,
+        topological_model,
         ccd_curve,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve,
         carbonate_anchor_plate_id,
@@ -322,50 +314,38 @@ def calc_carbonate_decompacted_sediment_thickness(
 
     # Convert points from (lon, lat) to pygplates.PointOnSphere.
     points = [pygplates.PointOnSphere(lat, lon) for lon, lat in input_points]
-    
-    # Resolve the topologies for the current 'time'.
-    # We do this in the carbonate reference frame because the input points are in the carbonate reference frame.
-    resolved_topologies = []
-    pygplates.resolve_topologies(topology_filenames, rotation_model, resolved_topologies, time, anchor_plate_id=carbonate_anchor_plate_id)
 
-    # Assign a plate ID to each point using the resolved topologies.
-    # We'll need plate IDs to reconstruct each point prior to sampling reconstructed bathymetry.
-    resolved_topology_boundaries = [resolved_topology.get_resolved_boundary()
-            for resolved_topology in resolved_topologies]
-    resolved_topology_plate_ids = [resolved_topology.get_feature().get_reconstruction_plate_id()
-            for resolved_topology in resolved_topologies]
-    if USE_PTT:
-        point_plate_ids = points_in_polygons.find_polygons(points, resolved_topology_boundaries, resolved_topology_plate_ids)
-        # Default to zero plate ID for any points that happen to fall outside all topologies (eg, in a sliver crack).
-        for point_index, plate_id in enumerate(point_plate_ids):
-            if plate_id is None:
-                point_plate_ids[point_index] = 0
-    else:
-        # Default to zero plate ID for any points that happen to fall outside all topologies (eg, in a sliver crack).
-        point_plate_ids = [0] * len(points)
-        for point_index, point in enumerate(points):
-            for resolved_topology_index, resolved_topology_boundary in enumerate(resolved_topology_boundaries):
-                if resolved_topology_boundary.is_point_in_polygon(point):
-                    point_plate_ids[point_index] = resolved_topology_plate_ids[resolved_topology_index]
-                    break
+    # The rotation model is in the carbonate reference frame since that's the reference frame of the input points.
+    rotation_model = topological_model.get_rotation_model()
 
-    # Convert the points from the carbonate reference frame to the age grid and bathymetry reference frames so
+    # Convert the points from the carbonate reference frame (default) to the age grid and bathymetry reference frames so
     # that we can sample the age and bathymetry grids at 'time' (using their respective reference frames).
+    #
+    # First define the reference frame conversion rotation (from carbonate reference frame C to bathymetry reference frame B).
+    # Here 'P' is the plate ID of a point at time 't'.
+    #
+    # R = R(B->P, 0->t) * R(C->P, 0->t)^-1
+    #   = R(B->701, 0->t) * R(701->P, 0->t) * [R(C->701, 0->t) * R(701->P, 0->t)]^-1
+    #   = R(B->701, 0->t) * R(701->P, 0->t) * R(701->P, 0->t)^-1 * R(C->701, 0->t)^-1
+    #   = R(B->701, 0->t) * R(C->701, 0->t)^-1
+    #   = R(B->701, 0->t) * R(C->701, t->0)
+    #
+    # ...which is independent of 'P' and hence the same reference frame conversion rotation can be applied to all points.
+    #
+    # Arbitrary plate ID for converting between reference frames.
+    non_reference_plate_id = 701
+    # Get the rotation from 'time' to present day using the carbonate anchor plate ID (default anchor plate).
+    rotation_from_carbonate_grid_reference_frame = rotation_model.get_rotation(0, non_reference_plate_id, time)
+    # Get the rotation from present day back to 'time' using anchor plate 'age_grid_anchor_plate_id'.
+    rotation_to_age_grid_reference_frame = rotation_model.get_rotation(
+        time, non_reference_plate_id, 0, anchor_plate_id=age_grid_anchor_plate_id)
+    # Get the rotation from present day back to 'time' using anchor plate 'bathymetry_grid_anchor_plate_id'.
+    rotation_to_bathymetry_grid_reference_frame = rotation_model.get_rotation(
+        time, non_reference_plate_id, 0, anchor_plate_id=bathymetry_grid_anchor_plate_id)
+    #
     input_points_in_age_grid_reference_frame = []
     input_points_in_bathymetry_grid_reference_frame = []
-    for point_index, point in enumerate(points):
-        plate_id = point_plate_ids[point_index]
-
-        # Get the rotation from 'time' to present day using anchor plate 'carbonate_anchor_plate_id'.
-        rotation_from_carbonate_grid_reference_frame = rotation_model.get_rotation(
-            0, plate_id, time, anchor_plate_id=carbonate_anchor_plate_id)
-        # Get the rotation from present day back to 'time' using anchor plate 'age_grid_anchor_plate_id'.
-        rotation_to_age_grid_reference_frame = rotation_model.get_rotation(
-            time, plate_id, 0, anchor_plate_id=age_grid_anchor_plate_id)
-        # Get the rotation from present day back to 'time' using anchor plate 'bathymetry_grid_anchor_plate_id'.
-        rotation_to_bathymetry_grid_reference_frame = rotation_model.get_rotation(
-            time, plate_id, 0, anchor_plate_id=bathymetry_grid_anchor_plate_id)
-
+    for point in points:
         input_lat_lon_point_in_age_grid_reference_frame = (
             rotation_to_age_grid_reference_frame * rotation_from_carbonate_grid_reference_frame * point)
         input_points_in_age_grid_reference_frame.append(
@@ -404,6 +384,7 @@ def calc_carbonate_decompacted_sediment_thickness(
     reconstruction_time = time + time_interval
     reconstructed_ages = [(age - time_interval) for age in ages]
     reconstructed_point_indices = point_indices[:]
+    reconstructed_points = [points[point_index] for point_index in point_indices]
     while reconstruction_time <= bathymetry_filename_oldest_time:
         # print(reconstruction_time); sys.stdout.flush()
 
@@ -414,33 +395,47 @@ def calc_carbonate_decompacted_sediment_thickness(
             reconstructed_point_index = reconstructed_point_indices[index]
             if reconstructed_ages[reconstructed_point_index] <= 0:
                 del reconstructed_point_indices[index]
+                del reconstructed_points[index]
                 continue
             index += 1
         
         # Finished if all ocean points appeared after current reconstruction time.
         if not reconstructed_point_indices:
             break
-        
-        # Reconstruct each point from 'time' to 'reconstruction_time'.
-        #
-        # And convert them from the carbonate reference frame to the bathymetry reference frame so that
-        # we can sample the bathymetry grid at 'reconstruction_time' (using its reference frame).
-        reconstructed_points_in_bathymetry_grid_reference_frame = []
-        for reconstructed_point_index in reconstructed_point_indices:
-            plate_id = point_plate_ids[reconstructed_point_index]
-            point = points[reconstructed_point_index]
 
-            # Get the rotation from 'time' to present day using anchor plate 'carbonate_anchor_plate_id'.
-            rotation_from_carbonate_grid_reference_frame = rotation_model.get_rotation(
-                0, plate_id, time, anchor_plate_id=carbonate_anchor_plate_id)
-            # Get the rotation from present day back to 'reconstruction_time' using anchor plate 'bathymetry_grid_anchor_plate_id'.
-            rotation_to_bathymetry_grid_reference_frame = rotation_model.get_rotation(
-                reconstruction_time, plate_id, 0, anchor_plate_id=bathymetry_grid_anchor_plate_id)
+        # Convert from the carbonate reference frame (default) to the bathymetry reference frame so that
+        # we can sample the bathymetry grid at 'reconstruction_time' (using its reference frame).
+        #
+        # Get the rotation from 'reconstruction_time' to present day using the carbonate anchor plate ID (default anchor plate).
+        rotation_from_carbonate_grid_reference_frame = rotation_model.get_rotation(0, non_reference_plate_id, reconstruction_time)
+        # Get the rotation from present day back to 'reconstruction_time' using anchor plate 'bathymetry_grid_anchor_plate_id'.
+        rotation_to_bathymetry_grid_reference_frame = rotation_model.get_rotation(
+            reconstruction_time, non_reference_plate_id, 0, anchor_plate_id=bathymetry_grid_anchor_plate_id)
+
+        # Find the topological plate/network containing each reconstructed point at 'reconstruction_time - time_interval'.
+        reconstructed_point_locations = topological_model.topological_snapshot(
+            reconstruction_time - time_interval).get_point_locations(reconstructed_points)
+        
+        # Reconstruct each point from 'reconstruction_time - time_interval' to 'reconstruction_time'.
+        reconstructed_points_in_bathymetry_grid_reference_frame = []
+        for index, reconstructed_point in enumerate(reconstructed_points):
+            reconstructed_point_location = reconstructed_point_locations[index]
+
+            # Reconstruct the current point to 'reconstruction_time' (from 'reconstruction_time - time_interval').
+            if reconstructed_point_location.located_in_resolved_boundary():  # if point is inside a resolved boundary
+                reconstructed_point = reconstructed_point_location.located_in_resolved_boundary().reconstruct_point(reconstructed_point, reconstruction_time)
+            elif reconstructed_point_location.located_in_resolved_network():  # if point is inside a resolved network
+                reconstructed_point = reconstructed_point_location.located_in_resolved_network().reconstruct_point(reconstructed_point, reconstruction_time)
+            # else point is not in any resolved topologies, so leave it where it is (ie, don't reconstruct it over the current time interval).
+
+            # Store the reconstructed point (so we can later continue reconstruction over the next time interval).
+            reconstructed_points[index] = reconstructed_point
             
-            reconstructed_lat_lon_point_in_bathymetry_grid_reference_frame = (
-                rotation_to_bathymetry_grid_reference_frame * rotation_from_carbonate_grid_reference_frame * point)
+            # Convert to the bathymetry reference frame.
+            reconstructed_point_in_bathymetry_grid_reference_frame = (
+                rotation_to_bathymetry_grid_reference_frame * rotation_from_carbonate_grid_reference_frame * reconstructed_point)
             reconstructed_points_in_bathymetry_grid_reference_frame.append(
-                reconstructed_lat_lon_point_in_bathymetry_grid_reference_frame.to_lat_lon()[::-1])  # swap (lat, lon)
+                reconstructed_point_in_bathymetry_grid_reference_frame.to_lat_lon()[::-1])  # swap (lat, lon)
         
         # Reconstructed bathymetry filename for the current reconstruction time.
         reconstructed_bathymetry_filename = bathymetry_grid_filenames_format.format(reconstruction_time)
@@ -524,8 +519,7 @@ def calc_sedimentation(
         bathymetry_grid_filenames_format,
         bathymetry_grid_anchor_plate_id,
         bathymetry_filename_oldest_time,
-        topology_filenames,
-        rotation_model,
+        topological_model,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         carbonate_anchor_plate_id,
@@ -558,7 +552,7 @@ def calc_sedimentation(
         bathymetry_grid_filenames_format,
         bathymetry_grid_anchor_plate_id,
         bathymetry_filename_oldest_time,
-        topology_filenames, rotation_model,
+        topological_model,
         ccd_curve, max_carbonate_decomp_sed_rate_cm_per_ky_curve,
         carbonate_anchor_plate_id,
         time)
@@ -601,8 +595,7 @@ def calc_sedimentation_and_write_data(
         latitude_range,  # (min, max) tuple
         longitude_range, # (min, max) tuple
         grid_spacing,
-        rotation_filenames,
-        topology_filenames,
+        topological_model,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         age_grid_filenames_format,
@@ -616,9 +609,6 @@ def calc_sedimentation_and_write_data(
         carbonate_anchor_plate_id):
     
     print('Time: ', time)
-
-    # Create the rotation model from the rotation files.
-    rotation_model = pygplates.RotationModel(rotation_filenames)
     
     # Calculate carbonate decompacted and compacted sediment thickness at each input point that is in
     # the age and bathmetry grids (in unmasked regions of both grids).
@@ -629,8 +619,7 @@ def calc_sedimentation_and_write_data(
         bathymetry_grid_filenames_format,
         bathymetry_grid_anchor_plate_id,
         bathymetry_filename_oldest_time,
-        topology_filenames,
-        rotation_model,
+        topological_model,
         ccd_curve_filename,
         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
         carbonate_anchor_plate_id,
@@ -729,6 +718,10 @@ def calc_sedimentation_and_write_data_for_times(
     # Generate a uniform global grid of lat/lon points.
     input_points = generate_input_points_grid(grid_spacing, latitude_range, longitude_range)
 
+    # Create a topological model up front to reuse topological snapshots across reconstruction times.
+    topological_model = pygplates.TopologicalModel(
+        topology_filenames, rotation_filenames, anchor_plate_id=carbonate_anchor_plate_id)
+    
     # Either distribute each time iteration (over array of times) across all CPU cores, or
     # run time iteration loop serially (ie, use only one CPU core).
     if use_all_cpu_cores:
@@ -745,8 +738,7 @@ def calc_sedimentation_and_write_data_for_times(
                         latitude_range,
                         longitude_range,
                         grid_spacing,
-                        rotation_filenames,
-                        topology_filenames,
+                        topological_model,
                         ccd_curve_filename,
                         max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
                         age_grid_filenames_format,
@@ -786,8 +778,7 @@ def calc_sedimentation_and_write_data_for_times(
                 latitude_range,
                 longitude_range,
                 grid_spacing,
-                rotation_filenames,
-                topology_filenames,
+                topological_model,
                 ccd_curve_filename,
                 max_carbonate_decomp_sed_rate_cm_per_ky_curve_filename,
                 age_grid_filenames_format,
