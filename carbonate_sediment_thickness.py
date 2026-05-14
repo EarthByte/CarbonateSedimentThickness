@@ -33,6 +33,17 @@ from scipy.interpolate import interp1d
 import sys
 
 
+# Required pygplates version.
+# Need version 0.50 to be able to use:
+#   https://www.gplates.org/docs/pygplates/generated/pygplates.resolvedtopologicalboundary#pygplates.ResolvedTopologicalBoundary.reconstruct_point
+PYGPLATES_VERSION_REQUIRED = pygplates.Version(0, 50)
+#    
+# Check the imported pygplates version.
+if pygplates.Version.get_imported_version() < PYGPLATES_VERSION_REQUIRED:
+    raise RuntimeError('Using pygplates version {0} but version {1} or greater is required'.format(
+            pygplates.Version.get_imported_version(), PYGPLATES_VERSION_REQUIRED))
+
+
 #
 # Input Parameters.
 #
