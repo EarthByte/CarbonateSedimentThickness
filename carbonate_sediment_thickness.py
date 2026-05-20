@@ -423,26 +423,39 @@ def calc_carbonate_decompacted_sediment_thickness(
         rotation_to_bathymetry_grid_reference_frame = rotation_model.get_rotation(
             reconstruction_time, non_reference_plate_id, 0, anchor_plate_id=bathymetry_grid_anchor_plate_id)
 
-        # Find the topological plate/network containing each reconstructed point at 'reconstruction_time - time_interval'.
-        reconstructed_point_locations = topological_model.topological_snapshot(
-            reconstruction_time - time_interval).get_point_locations(reconstructed_points)
+        # PyGPlates 1.1 (coming soon) introduced TopologicalSnapshot.reconstruct_points() which is preferred for
+        # reconstructing over a single time step (with no deactivation).
+        if pygplates.Version.get_imported_version() >= pygplates.Version('1.1'):
+
+            # Resolved the topological plates/networks at the beginning of the time step ('reconstruction_time - time_interval').
+            topological_snapshot = topological_model.topological_snapshot(reconstruction_time - time_interval)
+
+            # Reconstruct each point from 'reconstruction_time - time_interval' to 'reconstruction_time'.
+            # Note that any point outside all resolved plates/networks will retain its input location (at beginning of current time step).
+            reconstructed_points = topological_snapshot.reconstruct_points(
+                reconstructed_points, reconstruction_time, return_input_if_not_intersect=True)
+            
+        else:
+            # For PyGPlates <= 1.0 we need to reconstruct over a time span that includes only a single time step.
+            initial_time = reconstruction_time - time_interval
+            final_time = reconstruction_time
+            reconstructed_time_spans = topological_model.reconstruct_geometry(
+                    reconstructed_points,
+                    initial_time=initial_time,
+                    oldest_time=final_time,
+                    youngest_time=initial_time,
+                    time_increment=time_interval,
+                    # All our points are on oceanic crust and we instead use the age grid to deactivate them (see above).
+                    deactivate_points=None)
+            
+            # Get the reconstructed points at the final time of the time span.
+            #
+            # Note: This should be the same size as the initial 'reconstructed_points' since we're not deactivating any points.
+            reconstructed_points = reconstructed_time_spans.get_geometry_points(final_time)
         
-        # Reconstruct each point from 'reconstruction_time - time_interval' to 'reconstruction_time'.
+        # Convert the reconstructed points to the bathymetry reference frame.
         reconstructed_points_in_bathymetry_grid_reference_frame = []
         for index, reconstructed_point in enumerate(reconstructed_points):
-            reconstructed_point_location = reconstructed_point_locations[index]
-
-            # Reconstruct the current point to 'reconstruction_time' (from 'reconstruction_time - time_interval').
-            if reconstructed_point_location.located_in_resolved_boundary():  # if point is inside a resolved boundary
-                reconstructed_point = reconstructed_point_location.located_in_resolved_boundary().reconstruct_point(reconstructed_point, reconstruction_time)
-            elif reconstructed_point_location.located_in_resolved_network():  # if point is inside a resolved network
-                reconstructed_point = reconstructed_point_location.located_in_resolved_network().reconstruct_point(reconstructed_point, reconstruction_time)
-            # else point is not in any resolved topologies, so leave it where it is (ie, don't reconstruct it over the current time interval).
-
-            # Store the reconstructed point (so we can later continue reconstruction over the next time interval).
-            reconstructed_points[index] = reconstructed_point
-            
-            # Convert to the bathymetry reference frame.
             reconstructed_point_in_bathymetry_grid_reference_frame = (
                 rotation_to_bathymetry_grid_reference_frame * rotation_from_carbonate_grid_reference_frame * reconstructed_point)
             reconstructed_points_in_bathymetry_grid_reference_frame.append(
